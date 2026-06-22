@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
 
-  const VERSION = '0.1.1';
+  const VERSION = '0.1.2';
   const PARSER_NAME = 'FHY_FREEBIRD';
 
   const AIRLINE_CODE_ALIASES = {
@@ -227,7 +227,7 @@
       const detail = findCrewDetailLine(lineGroups, i);
       if (!detail) continue;
 
-      const parsedName = splitNameSurname(name);
+      const parsedName = splitFreebirdNameSurname(name);
       const crew = buildCrew({
         orderNo: String(crews.length + 1),
         rawType: detail.role,
@@ -549,6 +549,19 @@
     return {
       name: parts.slice(0, -1).join(' '),
       surname: parts[parts.length - 1]
+    };
+  }
+
+  function splitFreebirdNameSurname(fullName) {
+    const parts = normalizePersonName(fullName).split(/\s+/).filter(Boolean);
+
+    if (parts.length <= 1) {
+      return { name: '', surname: parts[0] || '' };
+    }
+
+    return {
+      name: parts.slice(1).join(' '),
+      surname: parts[0]
     };
   }
 
