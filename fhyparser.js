@@ -2,7 +2,7 @@
 (function (global) {
   'use strict';
 
-  const VERSION = '0.1.0';
+  const VERSION = '0.1.1';
   const PARSER_NAME = 'FHY_FREEBIRD';
 
   const AIRLINE_CODE_ALIASES = {
@@ -110,7 +110,13 @@
   function parsePages(pages, context = {}, options = {}) {
     const warnings = [];
     const normalizedContext = normalizeContext(context);
-    const emptyResult = makeResult({ warnings });
+    const freebirdPages = Array.isArray(pages) ? pages.filter(isFreebirdPage) : [];
+    const detected = freebirdPages.length > 0;
+    const emptyResult = makeResult({
+      detected,
+      freebirdPageCount: freebirdPages.length,
+      warnings
+    });
 
     if (!Array.isArray(pages) || !pages.length) {
       warnings.push('PDF sayfasi bulunamadi.');
@@ -122,11 +128,17 @@
       return emptyResult;
     }
 
-    const candidates = findMatchingPages(pages, normalizedContext);
+    const candidates = findMatchingPages(freebirdPages, normalizedContext);
 
     if (!candidates.length) {
-      warnings.push('FHY/Freebird sayfasi veya ucus no eslesmesi bulunamadi.');
-      return makeResult({ warnings });
+      warnings.push(detected
+        ? 'FHY/Freebird PDF algilandi ama secili ucus no ile sayfa eslesmedi.'
+        : 'FHY/Freebird sayfasi bulunamadi.');
+      return makeResult({
+        detected,
+        freebirdPageCount: freebirdPages.length,
+        warnings
+      });
     }
 
     const best = candidates[0];
@@ -137,6 +149,8 @@
     }
 
     return makeResult({
+      detected: true,
+      freebirdPageCount: freebirdPages.length,
       matched: true,
       pageNo: best.page.pageNo,
       flightNo: best.info.flightNo || '',
@@ -231,6 +245,8 @@
   }
 
   function getCrewNameFromLine(line) {
+    if (isHeaderLine(line) || isDetailLikeLine(line)) return '';
+
     const nameText = (line.items || [])
       .filter(item => item.x >= 165 && item.x <= 360)
       .map(item => item.text)
@@ -268,13 +284,58 @@
 
     const dobByColumn = tokens.find(token => token.x >= 400 && token.x <= 500 && isDateToken(token.text));
     const dobByOrder = dateIndexes.length > 1 ? tokens[dateIndexes[1]] : null;
+    const identityNumber = getIdentityValue(tokens, roleIndex, dateIndexes);
+    const dateOfBirth = normalizeDate(dobByColumn?.text || dobByOrder?.text || '');
+    const nationality = getNationalityValue(tokens, dateIndexes);
+    const nationalityCode = normalizeNationality(nationality);
+
+    if (!identityNumber || !dateOfBirth || !/^[A-Z]{2}$/.test(nationalityCode)) {
+      return null;
+    }
 
     return {
       role: tokens[roleIndex].text,
-      identityNumber: getIdentityValue(tokens, roleIndex, dateIndexes),
-      dateOfBirth: normalizeDate(dobByColumn?.text || dobByOrder?.text || ''),
-      nationality: getNationalityValue(tokens, dateIndexes)
+      identityNumber,
+      dateOfBirth,
+      nationality: nationalityCode
     };
+  }
+
+  function isHeaderLine(line) {
+    const folded = foldChars(lineToText(line)).toUpperCase();
+    if (!folded) return false;
+
+    const headerWords = [
+      'CREW NAME',
+      'ROLE',
+      'GENDER',
+      'PASSPORT',
+      'EXPIRY',
+      'DOB',
+      'NATIONALITY'
+    ];
+
+    return headerWords.some(word => folded.includes(word));
+  }
+
+  function isDetailLikeLine(line) {
+    const tokens = getLineTokens(line);
+    const hasRole = tokens.some(token => mapCrewType(token.text));
+    if (!hasRole) return false;
+
+    const hasGender = tokens.some(token => GENDER_CODES.has(String(token.text || '').toUpperCase()));
+    const hasPassport = tokens.some(token => isPassportToken(token.text));
+    const hasDate = tokens.some(token => isDateToken(token.text));
+
+    return hasGender || hasPassport || hasDate;
+  }
+
+  function lineToText(line) {
+    return (line?.items || [])
+      .map(item => item.text)
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function getLineTokens(line) {
@@ -515,11 +576,13 @@
   function makeResult(overrides = {}) {
     return {
       matched: false,
+      detected: false,
       parser: PARSER_NAME,
       pageNo: 0,
       flightNo: '',
       crews: [],
       warnings: [],
+      freebirdPageCount: 0,
       candidates: [],
       ...overrides
     };
@@ -541,6 +604,19 @@
     if (/^(CREW NAME|NAME|ROLE|GENDER|PASSPORT|PASSPORT EXPIRY|DOB|NATIONALITY)$/.test(folded)) {
       return false;
     }
+
+    const blockedWords = [
+      'CREW MEMBER',
+      'MEMBER CONCERNED',
+      'CONCERNED',
+      'SIGNATURE',
+      'DECLARATION',
+      'FREEBIRD',
+      'AIRLINES',
+      'GENERAL DECLARATION'
+    ];
+
+    if (blockedWords.some(word => folded.includes(word))) return false;
 
     if (ROLE_PATTERN.test(folded)) return false;
 
@@ -573,7 +649,7 @@
     if (!folded) return '';
     if (NATIONALITY_MAP[folded]) return NATIONALITY_MAP[folded];
     if (/^[A-Z]{2}$/.test(folded)) return folded;
-    return folded.slice(0, 3);
+    return '';
   }
 
   function normalizePersonName(value) {
