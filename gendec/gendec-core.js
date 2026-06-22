@@ -455,7 +455,7 @@ async function handleCrewFileSelect(event) {
   document.getElementById('crewSubmitBtn').disabled = true;
 }
 
-const FHY_PARSER_CDN_URL = 'https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/fhyparser.js';
+const FHY_PARSER_CDN_URL = 'https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/fhy.js';
 let _fhyParserLoadPromise = null;
 
 function getFhyParserContext() {
@@ -501,6 +501,19 @@ function ensureFhyParserLoaded() {
   return _fhyParserLoadPromise;
 }
 
+function isLikelyFreebirdPdfText(text) {
+  const folded = foldTurkishChars(String(text || '')).toUpperCase();
+
+  return (
+    folded.includes('FREEBIRD AIRLINES') &&
+    (folded.includes('CREW NAME') || folded.includes('ROLE GENDER') || folded.includes('PASSPORT'))
+  ) || (
+    /\bFHY\s*[-/]?\s*\d{2,5}[A-Z]?\b/.test(folded) &&
+    folded.includes('CREW') &&
+    folded.includes('PASSPORT')
+  );
+}
+
 async function handleCrewPdfSelect(event) {
   const file = event.target.files[0];
 
@@ -523,28 +536,42 @@ async function handleCrewPdfSelect(event) {
 
   try {
     let fhyResult = { matched: false, crews: [], warnings: [] };
+    let fhyParserError = null;
 
     try {
       const fhyParser = await ensureFhyParserLoaded();
       fhyResult = await fhyParser.parsePdfFile(file, getFhyParserContext());
       console.info('[FHYParser] parse result', fhyResult);
     } catch (fhyErr) {
-      console.warn('[FHYParser] unavailable/error, generic parser fallback may run:', fhyErr);
+      fhyParserError = fhyErr;
+      console.warn('[FHYParser] unavailable/error:', fhyErr);
     }
 
     let crews = [];
-    const isFreebirdPdf = !!(fhyResult.detected || fhyResult.freebirdPageCount > 0);
+    let pdfText = '';
+    let isFreebirdPdf = !!(fhyResult.detected || fhyResult.freebirdPageCount > 0);
+
+    if (!isFreebirdPdf && (!fhyResult.matched || fhyParserError)) {
+      pdfText = await readPdfText(file);
+      isFreebirdPdf = isLikelyFreebirdPdfText(pdfText);
+
+      if (isFreebirdPdf) {
+        console.info('[FHYParser] Freebird PDF detected from PDF content; generic parser skipped.');
+      }
+    }
 
     if (fhyResult.matched && Array.isArray(fhyResult.crews) && fhyResult.crews.length) {
       crews = fhyResult.crews;
     } else if (!isFreebirdPdf) {
-      const text = await readPdfText(file);
-      crews = parseGendecCrewText(text);
+      if (!pdfText) pdfText = await readPdfText(file);
+      crews = parseGendecCrewText(pdfText);
     }
 
     if (!crews.length) {
       const fhyErrorNote = isFreebirdPdf
-        ? (fhyResult.matched && fhyResult.pageNo
+        ? (fhyParserError
+          ? ' Freebird PDF içerikten algılandı ama FHY parser çalışmadı.'
+          : fhyResult.matched && fhyResult.pageNo
           ? ` FHY sayfa ${fhyResult.pageNo} eşleşti ama ekip satırı okunamadı.`
           : ' Freebird PDF algılandı ama seçili uçuş no ile sayfa eşleşmedi.')
         : '';
