@@ -20,57 +20,41 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          index_path = Path('index.html')
-          index = index_path.read_text(encoding='utf-8')
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('<!-- VERSION: 1.3.1beta -->', '<!-- VERSION: 1.3.2beta -->', 1)
+          s = s.replace('<meta name="app-version" content="1.3.1beta">', '<meta name="app-version" content="1.3.2beta">', 1)
+          s = s.replace('<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css">', '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css?v=1.3.2beta">', 1)
 
-          index = index.replace('<!-- VERSION: 1.3.1beta -->', '<!-- VERSION: 1.3.2beta -->', 1)
-          index = index.replace('<meta name="app-version" content="1.3.1beta">', '<meta name="app-version" content="1.3.2beta">', 1)
-          index = index.replace(
-              '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css">',
-              '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css?v=1.3.2beta">',
-              1,
-          )
+          old = '      <input type="search" class="search-input" id="searchInput"\n        placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>\n    </div>\n\n    <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">'
+          new = '      <input type="search" class="search-input" id="searchInput"\n        placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>\n\n      <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">'
+          if old not in s:
+              raise SystemExit('toolbar/filter start not found')
+          s = s.replace(old, new, 1)
 
-          old_start = '''      <input type="search" class="search-input" id="searchInput"
-        placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>
-    </div>
+          old = '      <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>\n    </div>\n\n    <!-- Table -->'
+          new = '        <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>\n      </div>\n    </div>\n\n    <!-- Table -->'
+          if old not in s:
+              raise SystemExit('toolbar/filter end not found')
+          s = s.replace(old, new, 1)
+          s = s.replace('<label for="processFilter">Süreç Durumu</label>', '<label for="processFilter">Süreç</label>', 1)
+          s = s.replace('        Filtreleri Temizle\n', '        Temizle\n', 1)
+          p.write_text(s, encoding='utf-8')
 
-    <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">'''
-          new_start = '''      <input type="search" class="search-input" id="searchInput"
-        placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>
-
-      <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">'''
-          if old_start not in index:
-              raise SystemExit('Toolbar/filter start block not found')
-          index = index.replace(old_start, new_start, 1)
-
-          old_end = '''      <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>
-    </div>
-
-    <!-- Table -->'''
-          new_end = '''        <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>
-      </div>
-    </div>
-
-    <!-- Table -->'''
-          if old_end not in index:
-              raise SystemExit('Toolbar/filter end block not found')
-          index = index.replace(old_end, new_end, 1)
-          index = index.replace('<label for="processFilter">Süreç Durumu</label>', '<label for="processFilter">Süreç</label>', 1)
-          index = index.replace('        Filtreleri Temizle\n', '        Temizle\n', 1)
-
-          index_path.write_text(index, encoding='utf-8')
-
-          css_path = Path('style.css')
-          css = css_path.read_text(encoding='utf-8')
-          first_line, sep, rest = css.partition('\n')
-          if first_line.startswith('/* TGS HGSB UI styles | version:'):
-              css = '/* TGS HGSB UI styles | version: 1.3.2beta */' + (sep + rest if sep else '')
+          p = Path('style.css')
+          s = p.read_text(encoding='utf-8')
+          lines = s.splitlines()
+          if lines and lines[0].startswith('/* TGS HGSB UI styles | version:'):
+              lines[0] = '/* TGS HGSB UI styles | version: 1.3.2beta */'
+              s = '\n'.join(lines) + ('\n' if s.endswith('\n') else '')
           else:
-              css = '/* TGS HGSB UI styles | version: 1.3.2beta */\n' + css
+              s = '/* TGS HGSB UI styles | version: 1.3.2beta */\n' + s
 
-          override = r'''
+          marker = '/* ── 1.3.2beta: filters integrated into toolbar ── */'
+          if marker in s:
+              s = s.split(marker, 1)[0].rstrip() + '\n'
 
+          override = """
     /* ── 1.3.2beta: filters integrated into toolbar ── */
     .search-input {
       margin-left: auto;
@@ -156,23 +140,13 @@ jobs:
     @media (max-width: 720px) {
       .toolbar { align-items: stretch; }
       .search-input { width: 100%; }
-      .toolbar .filter-panel {
-        width: 100%;
-        align-items: stretch;
-      }
+      .toolbar .filter-panel { width: 100%; align-items: stretch; }
       .toolbar .filter-group { flex: 1 1 145px; }
       .toolbar .filter-group select { width: 100% !important; }
-      .toolbar .filter-summary {
-        flex: 1 1 100%;
-        white-space: normal;
-      }
+      .toolbar .filter-summary { flex: 1 1 100%; white-space: normal; }
     }
-'''
-          marker = '/* ── 1.3.2beta: filters integrated into toolbar ── */'
-          if marker in css:
-              css = css.split(marker, 1)[0].rstrip() + '\n'
-          css = css.rstrip() + override + '\n'
-          css_path.write_text(css, encoding='utf-8')
+          """
+          p.write_text(s.rstrip() + '\n\n' + override.strip() + '\n', encoding='utf-8')
           PY
 
       - name: Commit 1.3.2beta
