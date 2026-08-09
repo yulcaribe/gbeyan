@@ -1,4 +1,4 @@
-<!-- VERSION: 1.3.1beta -->
+<!-- VERSION: 1.3.2beta -->
 <!DOCTYPE html>
 <html lang="tr">
 
@@ -6,8 +6,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGS HGSB Gönderim Aracı</title>
-  <meta name="app-version" content="1.3.1beta">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css">
+  <meta name="app-version" content="1.3.2beta">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css?v=1.3.2beta">
 </head>
 <body>
 
@@ -93,9 +93,8 @@
 
       <input type="search" class="search-input" id="searchInput"
         placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>
-    </div>
 
-    <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">
+      <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">
       <div class="filter-group">
         <label for="directionFilter">Yön</label>
         <select id="directionFilter" onchange="onFlightFilterChange()" disabled>
@@ -118,7 +117,7 @@
       </div>
 
       <div class="filter-group filter-group-wide">
-        <label for="processFilter">Süreç Durumu</label>
+        <label for="processFilter">Süreç</label>
         <select id="processFilter" onchange="onFlightFilterChange()" disabled>
           <option value="ALL">Tümü</option>
           <option value="NOT_SENT">Gönderilmedi</option>
@@ -136,10 +135,11 @@
       </div>
 
       <button class="filter-reset-btn" id="filterResetBtn" onclick="resetFlightFilters()" disabled>
-        Filtreleri Temizle
+        Temizle
       </button>
 
-      <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>
+        <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>
+      </div>
     </div>
 
     <!-- Table -->
