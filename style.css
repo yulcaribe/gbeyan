@@ -1,4 +1,4 @@
-/* TGS HGSB UI styles | version: 20260622-5 */
+/* TGS HGSB UI styles | version: 20260809-1 */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
@@ -193,8 +193,39 @@
       transition: background .2s;
     }
     #csvBtn:hover { background: #2a4a7f; }
+    #csvBtn:disabled { opacity: .55; cursor: wait; }
 
     .toolbar-sep { width: 1px; height: 28px; background: #e2e8f0; margin: 0 4px; }
+
+    .station-input {
+      width: 72px;
+      padding: 7px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #1e293b;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-align: center;
+      outline: none;
+    }
+    .station-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+    .station-input:disabled { background: #f1f5f9; color: #64748b; cursor: wait; }
+
+    .station-apply-btn {
+      min-height: 34px;
+      padding: 6px 9px;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      background: #eff6ff;
+      color: #1e40af;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .station-apply-btn:hover:not(:disabled) { background: #dbeafe; }
+    .station-apply-btn:disabled { opacity: .55; cursor: wait; }
 
     .search-input {
       padding: 7px 10px 7px 32px;
@@ -207,18 +238,91 @@
       background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 10px center;
     }
     .search-input:focus { border-color: #3b82f6; }
+    .search-input:disabled { background-color: #f8fafc; color: #94a3b8; cursor: not-allowed; }
 
-    .hist-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .hist-table th {
-      background: #f8fafc; color: #64748b;
-      padding: 8px 12px; text-align: left;
-      font-size: 11px; font-weight: 600; text-transform: uppercase;
-      border-bottom: 1px solid #e2e8f0;
+    /* ── Flight filters ── */
+    .filter-panel {
+      display: flex;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      border: 1px solid #dbeafe;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+      transition: opacity .15s, background .15s;
     }
-    .hist-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-    .hist-table tr:last-child td { border-bottom: none; }
-    .hist-table tr:hover td { background: #f8fafc; }
-    .hist-empty { padding: 32px; text-align: center; color: #94a3b8; font-size: 13px; }
+
+    .filter-panel.is-disabled {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 130px;
+    }
+
+    .filter-group-wide { min-width: 190px; }
+
+    .filter-group label {
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    .filter-group select {
+      min-height: 34px;
+      padding: 6px 30px 6px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #1e293b;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .filter-group select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
+    .filter-group select:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+
+    .filter-reset-btn {
+      min-height: 34px;
+      padding: 6px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .filter-reset-btn:hover:not(:disabled) { background: #e2e8f0; }
+    .filter-reset-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .filter-summary {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      min-height: 34px;
+      margin-left: auto;
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    .filter-summary strong { color: #1e3a5f; font-size: 14px; }
+    .filter-summary span {
+      padding-left: 10px;
+      border-left: 1px solid #e2e8f0;
+      white-space: nowrap;
+    }
 
     /* ── Table ── */
     .table-wrap {
@@ -297,6 +401,7 @@
 
     .row-arrival  { background: #f0fdf4; }
     .row-departure{ background: #eff6ff; }
+    .row-csv-missing { box-shadow: inset 4px 0 0 #8b5cf6; }
 
     tbody tr:hover { filter: brightness(.97); }
 
@@ -356,6 +461,28 @@
     .status-already   { color: #d97706; }
     .status-error     { color: #dc2626; }
     .status-cancelled { color: #6b7280; }
+    .status-hgbs-missing { color: #c2410c; }
+    .status-csv-missing { color: #6d28d9; }
+
+    .comparison-note {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border: 1px solid #c4b5fd;
+      border-radius: 999px;
+      background: #f5f3ff;
+      color: #6d28d9;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .filter-empty-row td {
+      padding: 36px 20px;
+      background: #fff;
+      color: #94a3b8;
+      text-align: center;
+      font-size: 13px;
+    }
 
     .crew-stepper {
       display: inline-flex;
@@ -549,10 +676,6 @@
       display: flex; justify-content: flex-end; gap: 8px;
     }
 
-    /* ── Confirm modal (for clearHistory) ── */
-    .confirm-modal-card { max-width: 380px; }
-    .confirm-modal-body { padding: 20px; font-size: 14px; }
-
     /* ── Misc ── */
     #globalAlert { margin-bottom: 12px; }
 
@@ -566,6 +689,10 @@
 
     @media (max-width: 768px) {
       .toolbar { flex-direction: column; align-items: flex-start; }
+      .toolbar-sep { display: none; }
+      .filter-panel { align-items: stretch; }
+      .filter-group, .filter-group-wide { min-width: calc(50% - 5px); flex: 1 1 calc(50% - 5px); }
+      .filter-summary { width: 100%; margin-left: 0; }
       .topbar { flex-wrap: wrap; padding: 10px 14px; }
       td, th { font-size: 12px; padding: 8px 10px; }
     }

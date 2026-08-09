@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TGS HGSB Gönderim Aracı</title>
-    <meta name="app-version" content="20260622-5">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css?v=20260622-5">
+  <meta name="app-version" content="20260809-1">
+  <link rel="stylesheet" href="style.css?v=20260809-1">
 </head>
 <body>
 
@@ -77,18 +77,68 @@
 
       <div class="toolbar-sep"></div>
 
-      <input type="search" class="search-input" id="searchInput"
-        placeholder="Ara" oninput="onSearch(this.value)">
+      <div class="toolbar-group station-group">
+        <label class="toolbar-label" for="stationInput">İstasyon</label>
+        <input type="text" id="stationInput" class="station-input" value="AYT" maxlength="3"
+          aria-label="Üç harfli istasyon kodu"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3)"
+          onchange="onStationChange(this.value)"
+          onkeydown="if(event.key==='Enter') this.blur()">
+        <button type="button" class="station-apply-btn" id="stationApplyBtn"
+          onclick="onStationChange(document.getElementById('stationInput').value)">Uygula</button>
+      </div>
 
       <div class="toolbar-sep"></div>
 
-      <button class="btn btn-secondary" onclick="openHistoryModal()" style="padding:7px 14px;">
-        Geçmiş
+      <input type="search" class="search-input" id="searchInput"
+        placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>
+    </div>
+
+    <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">
+      <div class="filter-group">
+        <label for="directionFilter">Yön</label>
+        <select id="directionFilter" onchange="onFlightFilterChange()" disabled>
+          <option value="ALL">Tümü</option>
+          <option value="GELİŞ">Geliş</option>
+          <option value="GİDİŞ">Gidiş</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label for="comparisonFilter">Takip</label>
+        <select id="comparisonFilter" onchange="onFlightFilterChange()" disabled>
+          <option value="ALL">Tümü</option>
+          <option value="PROBLEM">Sorunlular</option>
+          <option value="HGBS_MISSING">HGBS'de Eksik</option>
+          <option value="CSV_MISSING">CSV'de Eksik</option>
+          <option value="ERROR">Hatalı</option>
+          <option value="MATCHED">Eşleşenler</option>
+        </select>
+      </div>
+
+      <div class="filter-group filter-group-wide">
+        <label for="processFilter">Süreç Durumu</label>
+        <select id="processFilter" onchange="onFlightFilterChange()" disabled>
+          <option value="ALL">Tümü</option>
+          <option value="NOT_SENT">Gönderilmedi</option>
+          <option value="SENT">Gönderildi / Taslak</option>
+          <option value="DECLARED">Beyan Edildi</option>
+          <option value="APPROVED">Onaylandı</option>
+          <option value="WITHDRAWN">Geri Çekildi</option>
+          <option value="CANCELLED">İptal Edildi</option>
+          <option value="CANCEL_REQUESTED">İptal Talebi</option>
+          <option value="RETURNED">Geri Gönderildi</option>
+          <option value="RETURN_REQUESTED">Geri Gönderme Talebi</option>
+          <option value="ERROR">Hatalı</option>
+          <option value="OTHER">Diğer</option>
+        </select>
+      </div>
+
+      <button class="filter-reset-btn" id="filterResetBtn" onclick="resetFlightFilters()" disabled>
+        Filtreleri Temizle
       </button>
 
-      <button class="btn btn-danger" id="clearHistBtn" onclick="confirmClearHistory()" style="padding:7px 14px;">
-        Geçmişi Temizle
-      </button>
+      <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>
     </div>
 
     <!-- Table -->
@@ -289,20 +339,6 @@
 </div>
 
 
-<!-- ══════════════════════ MODAL — Geçmiş ══════════════════════ -->
-<div class="modal-overlay hidden" id="historyOverlay">
-  <div class="modal-card" style="max-width:700px;width:95%">
-    <div class="modal-header">
-      <h2>Gönderim Geçmişi</h2>
-      <button class="modal-close" onclick="closeHistoryModal()">✕</button>
-    </div>
-    <div style="padding:16px;max-height:60vh;overflow-y:auto" id="historyModalBody"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeHistoryModal()">Kapat</button>
-    </div>
-  </div>
-</div>
-
 <!-- ══════════════════════ MODAL — Uçuş İptal ══════════════════════ -->
 <div class="modal-overlay hidden" id="cancelOverlay">
   <div class="modal-card" style="max-width:460px">
@@ -317,25 +353,6 @@
     </div>
   </div>
 </div>
-
-<!-- ══════════════════════ MODAL — Confirm clearHistory ══════════════════════ -->
-<div class="modal-overlay hidden" id="confirmOverlay">
-  <div class="modal-card confirm-modal-card">
-    <div class="modal-header">
-      <h2>Geçmişi Temizle</h2>
-      <button class="modal-close" onclick="closeConfirm()">✕</button>
-    </div>
-    <div class="confirm-modal-body">
-      localStorage'daki tüm gönderim geçmişi silinecek. Daha önce gönderilen uçuşlar tekrar "Bekliyor" durumuna gelecek.<br><br>
-      <strong>Emin misiniz?</strong>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeConfirm()">Vazgeç</button>
-      <button class="btn btn-danger" onclick="clearHistory()">Evet, Temizle</button>
-    </div>
-  </div>
-</div>
-
 
 <!-- ══════════════════════ kodun düzgün çalışması için Lütfen scriptler sıralamasını koruyunuz
 1.pdf.min.sc
@@ -361,7 +378,6 @@ const MOCK_MODE    = false;   // ← test MOD
 const BASE_URL     = 'https://hgbsapi.ticaret.gov.tr';
 const KEY_TOKEN    = 'tgs_bearer';
 const KEY_USER     = 'tgs_user';
-const KEY_HISTORY  = 'tgs_flight_history';
 const HGSB_AUTO_REFRESH_MS = 30 * 1000; // 30 saniye
 
 
@@ -381,6 +397,13 @@ const STATE = {
   user: { userName: '', taxFirmName: '', taxNumber: '', userType: '', userId: '', userProfileName: '' },
   crewNumber: 6,
   flightDate: todayStr(),
+  stationCode: 'AYT',
+  filtersReady: false,
+  filters: {
+    direction: 'ALL',
+    comparison: 'ALL',
+    process: 'ALL'
+  },
   rows: []
 };
 
@@ -431,9 +454,14 @@ function convertAircraftType(csvType) {
   return map[t] ?? 'OZEL-JET';
 }
 
-function generateFlightId(type, flightNo, reg, date) {
-  const raw = encodeURIComponent([type, flightNo, reg, date].join('|'));
+function generateFlightId(type, flightNo, reg, date, stationCode = '') {
+  const raw = encodeURIComponent([type, flightNo, reg, date, stationCode].join('|'));
   return btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+function normalizeStationCode(value, fallback = 'AYT') {
+  const code = String(value || '').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+  return code || fallback;
 }
 
 function getNationalityCode(tailNumber) {
@@ -486,6 +514,7 @@ let HGBS_FLIGHT_CACHE = {};
 let HGBS_FETCHED_DATES = new Set();
 let _hgsbAutoRefreshTimer = null;
 let _hgsbAutoRefreshRunning = false;
+let _hgsbCacheGeneration = 0;
 
 const AIRLINE_CODE_ALIASES = {
   SXS: 'XQ',
@@ -518,7 +547,7 @@ function getRowFlightDate(row) {
 }
 
 function getRowId(row) {
-  return generateFlightId(row.type, row.flightNo, row.reg, getRowFlightDate(row));
+  return generateFlightId(row.type, row.flightNo, row.reg, getRowFlightDate(row), STATE.stationCode);
 }
 
 function getUniqueFlightDates(rows = STATE.rows) {
@@ -570,7 +599,7 @@ function getHGBSQueryDatesForFlightDate(dateVal) {
 }
 
 function getHGBSFlightScheduledDate(f, flightTypeCode, fallbackDate) {
-  const type = normalizeCode(flightTypeCode || f?.flightTypeCode || '');
+  const type = normalizeStatus(flightTypeCode || f?.flightTypeCode || '');
 
   if (type === 'GLS') {
     return parseHGBSDateOnly(
@@ -620,12 +649,12 @@ function applyHistoryToRow(row) {
 
   row.flightDate = getRowFlightDate(row);
   row.id = getRowId(row);
+  const entry = findHGBSEntryForRow(row);
 
-  if (isAlreadySent(row.id)) {
-    const e = getHistoryEntry(row.id);
+  if (entry) {
     row._status = 'already_sent';
-    row._result = { apiId: e.apiId || '' };
-    row._sentAt = e.sentAt || e.hgsbAt || '';
+    row._result = { apiId: entry.apiId || '' };
+    row._sentAt = entry.sentAt || entry.hgsbAt || '';
     row._error = null;
   } else if (row._status === 'already_sent') {
     resetRowSubmissionState(row);
@@ -648,7 +677,7 @@ function normalizeFlightNo(v) {
 
 function splitFlightNo(flightNo) {
   const v = normalizeFlightNo(flightNo);
-  const m = v.match(/^([A-Z]{2,3})(\d+[A-Z]?)$/);
+  const m = v.match(/^([A-Z0-9]{2,3})(\d+[A-Z]?)$/);
 
   if (!m) {
     return {
@@ -677,6 +706,19 @@ function getFlightNoVariants(flightNo) {
   return Array.from(variants);
 }
 
+function findHGBSEntryForRow(row) {
+  if (!row) return null;
+  if (row._historyEntry) return row._historyEntry;
+
+  const date = getRowFlightDate(row);
+  for (const flightNo of getFlightNoVariants(row.flightNo)) {
+    const key = makeHGBSKey(row.type, flightNo, row.reg, date);
+    if (HGBS_FLIGHT_CACHE[key]) return HGBS_FLIGHT_CACHE[key];
+  }
+
+  return HISTORY_CACHE[getRowId(row)] || null;
+}
+
 function normalizeReg(v) {
   return String(v ?? '')
     .trim()
@@ -691,8 +733,9 @@ function normalizeStatus(v) {
     .toUpperCase();
 }
 
-function makeHGBSKey(type, flightNo, reg, dateVal) {
+function makeHGBSKey(type, flightNo, reg, dateVal, stationCode = STATE.stationCode) {
   return [
+    normalizeStationCode(stationCode),
     normalizeFlightDate(dateVal, ''),
     String(type || '').trim().toUpperCase(),
     normalizeFlightNo(flightNo),
@@ -833,6 +876,8 @@ async function getAgencyFlightsFromHGBS(params) {
 async function refreshHGBSFlightsForDate(dateVal, options = {}) {
   const queryDate = normalizeFlightDate(dateVal || STATE.flightDate, todayStr());
   const hgbDate = toHgbDate(queryDate);
+  const stationCode = normalizeStationCode(options.stationCode || STATE.stationCode);
+  const requestGeneration = options.requestGeneration ?? _hgsbCacheGeneration;
 
   if (options.clear !== false) clearHistoryForDate(queryDate);
   HISTORY_READY = false;
@@ -841,113 +886,98 @@ async function refreshHGBSFlightsForDate(dateVal, options = {}) {
     getAgencyFlightsFromHGBS({
       startDate: hgbDate,
       endDate: hgbDate,
-      arrivalPortCode: 'AYT',
+      arrivalPortCode: stationCode,
       type: 'GLS'
     }),
 
     getAgencyFlightsFromHGBS({
       startDate: hgbDate,
       endDate: hgbDate,
-      departurePortCode: 'AYT',
+      departurePortCode: stationCode,
       type: 'GDS'
     })
   ]);
 
-const arrivals = unwrapFlightList(arrRes);
-const departures = unwrapFlightList(depRes);
-
-function getFlightNoVariantsInside(flightNo) {
-  const normalized = normalizeFlightNo(flightNo);
-
-  const m = normalized.match(/^([A-Z0-9]{2,3})(\d+[A-Z]?)$/);
-  if (!m) return [normalized];
-
-  const prefix = m[1];
-  const number = m[2];
-
-  const variants = new Set();
-  variants.add(normalized);
-
-  if (AIRLINE_CODE_ALIASES[prefix]) {
-    variants.add(AIRLINE_CODE_ALIASES[prefix] + number);
+  // İstasyon değiştirilirken önceki isteğin geç dönüp yeni cache'i kirletmesini engelle.
+  if (requestGeneration !== _hgsbCacheGeneration || stationCode !== STATE.stationCode) {
+    return HISTORY_CACHE;
   }
 
-  return Array.from(variants);
-}
+  const arrivals = unwrapFlightList(arrRes);
+  const departures = unwrapFlightList(depRes);
 
   arrivals.forEach(f => {
-  const flightNo = extractFlightNo(f);
-  const reg = extractReg(f);
+    const flightNo = extractFlightNo(f);
+    const reg = extractReg(f);
+    if (!flightNo) return;
 
-  if (!flightNo) return;
-
-  const status = extractStatus(f);
-  const apiId = extractApiId(f);
-  const hgsbAt = f.createDate || f.createdDate || f.insertDate || f.createdAt || f.statusDate || '';
-
-  getFlightNoVariantsInside(flightNo).forEach(variantFlightNo => {
+    const status = extractStatus(f);
+    const apiId = extractApiId(f);
+    const hgsbAt = f.createDate || f.createdDate || f.insertDate || f.createdAt || f.statusDate || '';
     const scheduledDate = getHGBSFlightScheduledDate(f, 'GLS', queryDate);
-    const id = generateFlightId('GELİŞ', variantFlightNo, reg, scheduledDate);
-    const key = makeHGBSKey('GELİŞ', variantFlightNo, reg, scheduledDate);
 
-    const entry = {
-      id,
-      flightDate: scheduledDate,
-      queryDate,
-      flightNo: variantFlightNo,
-      originalFlightNo: flightNo,
-      reg,
-      type: 'GELİŞ',
-      status,
-      apiId,
-      hgsbAt,
-      raw: f
-    };
+    getFlightNoVariants(flightNo).forEach(variantFlightNo => {
+      const id = generateFlightId('GELİŞ', variantFlightNo, reg, scheduledDate, stationCode);
+      const key = makeHGBSKey('GELİŞ', variantFlightNo, reg, scheduledDate, stationCode);
+      const entry = {
+        id,
+        stationCode,
+        flightDate: scheduledDate,
+        queryDate,
+        flightNo: variantFlightNo,
+        originalFlightNo: flightNo,
+        reg,
+        type: 'GELİŞ',
+        status,
+        apiId,
+        hgsbAt,
+        raw: f
+      };
 
-    HGBS_FLIGHT_CACHE[key] = entry;
-    HISTORY_CACHE[id] = entry;
+      HGBS_FLIGHT_CACHE[key] = entry;
+      HISTORY_CACHE[id] = entry;
+    });
   });
-});
 
-departures.forEach(f => {
-  const flightNo = extractFlightNo(f);
-  const reg = extractReg(f);
+  departures.forEach(f => {
+    const flightNo = extractFlightNo(f);
+    const reg = extractReg(f);
+    if (!flightNo) return;
 
-  if (!flightNo) return;
-
-  const status = extractStatus(f);
-  const apiId = extractApiId(f);
-  const hgsbAt = f.createDate || f.createdDate || f.insertDate || f.createdAt || f.statusDate || '';
-
-  getFlightNoVariantsInside(flightNo).forEach(variantFlightNo => {
+    const status = extractStatus(f);
+    const apiId = extractApiId(f);
+    const hgsbAt = f.createDate || f.createdDate || f.insertDate || f.createdAt || f.statusDate || '';
     const scheduledDate = getHGBSFlightScheduledDate(f, 'GDS', queryDate);
-    const id = generateFlightId('GİDİŞ', variantFlightNo, reg, scheduledDate);
-    const key = makeHGBSKey('GİDİŞ', variantFlightNo, reg, scheduledDate);
 
-    const entry = {
-      id,
-      flightDate: scheduledDate,
-      queryDate,
-      flightNo: variantFlightNo,
-      originalFlightNo: flightNo,
-      reg,
-      type: 'GİDİŞ',
-      status,
-      apiId,
-      hgsbAt,
-      raw: f
-    };
+    getFlightNoVariants(flightNo).forEach(variantFlightNo => {
+      const id = generateFlightId('GİDİŞ', variantFlightNo, reg, scheduledDate, stationCode);
+      const key = makeHGBSKey('GİDİŞ', variantFlightNo, reg, scheduledDate, stationCode);
+      const entry = {
+        id,
+        stationCode,
+        flightDate: scheduledDate,
+        queryDate,
+        flightNo: variantFlightNo,
+        originalFlightNo: flightNo,
+        reg,
+        type: 'GİDİŞ',
+        status,
+        apiId,
+        hgsbAt,
+        raw: f
+      };
 
-    HGBS_FLIGHT_CACHE[key] = entry;
-    HISTORY_CACHE[id] = entry;
+      HGBS_FLIGHT_CACHE[key] = entry;
+      HISTORY_CACHE[id] = entry;
+    });
   });
-});
 
   HISTORY_READY = true;
-  HGBS_FETCHED_DATES.add(queryDate);
+  HGBS_FETCHED_DATES.add(`${stationCode}|${queryDate}`);
 
   console.log('HGBS canlı sorgu tamamlandı:', {
     date: hgbDate,
+    station: stationCode,
     arrivals: arrivals.length,
     departures: departures.length,
     total: Object.keys(HISTORY_CACHE).length
@@ -957,26 +987,34 @@ departures.forEach(f => {
 }
 
 async function refreshHGBSFlightsForRows(rows = STATE.rows) {
+  if (!rows.length) return HISTORY_CACHE;
+
   const flightDates = getUniqueFlightDates(rows);
   const queryDates = new Set();
+  const stationCode = STATE.stationCode;
+  const requestGeneration = _hgsbCacheGeneration;
+
+  HISTORY_CACHE = {};
+  HGBS_FLIGHT_CACHE = {};
+  HGBS_FETCHED_DATES = new Set();
 
   flightDates.forEach(date => {
-    clearHistoryForDate(date);
     getHGBSQueryDatesForFlightDate(date).forEach(queryDate => queryDates.add(queryDate));
   });
 
   for (const date of queryDates) {
-    await refreshHGBSFlightsForDate(date, { clear: false });
+    await refreshHGBSFlightsForDate(date, {
+      clear: false,
+      stationCode,
+      requestGeneration
+    });
+
+    if (requestGeneration !== _hgsbCacheGeneration) break;
   }
 
   return HISTORY_CACHE;
 }
 
-// Eski kod bu ismi çağırıyor. İsmi koruyoruz.
-async function refreshHistoryFromSheet() {
-  STATE.flightDate = todayStr();
-  return await refreshHGBSFlightsForDate(STATE.flightDate);
-}
 //AUTOLOADER REFRESH30SEC FUNC
 function syncRowsWithHGBSHistory() {
   if (!STATE.rows.length) return 0;
@@ -1004,6 +1042,7 @@ function startHGSBAutoRefresh() {
 
   _hgsbAutoRefreshTimer = setInterval(async () => {
     if (!STATE.token) return;
+    if (!STATE.rows.length || !STATE.filtersReady) return;
     if (_hgsbAutoRefreshRunning) return;
 
     _hgsbAutoRefreshRunning = true;
@@ -1013,9 +1052,7 @@ function startHGSBAutoRefresh() {
 
       const changed = syncRowsWithHGBSHistory();
 
-      if (STATE.rows.length && changed > 0) {
-        renderTable();
-      }
+      renderTable();
 
       console.log('HGBS auto refresh tamamlandı:', {
         time: new Date().toLocaleTimeString(),
@@ -1037,23 +1074,12 @@ function stopHGSBAutoRefresh() {
   }
 }
 
-function loadHistory() {
-  return HISTORY_CACHE || {};
-}
-
-function isAlreadySent(id) {
-  const entry = loadHistory()[id];
-
-  // HGBS'de kayıt varsa durumunu ekranda göster.
-  // IPTAL/TASLAK/KABULEDILDI ayrımı render tarafında status olarak basılır.
-  return !!entry;
-}
-
 function markAsSent(id, meta = {}) {
   const now = new Date().toISOString();
 
   HISTORY_CACHE[id] = {
     id,
+    stationCode: meta.stationCode || STATE.stationCode,
     flightDate: meta.flightDate || '',
     sentAt: now,
     status: 'HGBS_FOUND',
@@ -1066,15 +1092,11 @@ function markAsSent(id, meta = {}) {
   };
 }
 
-function getHistoryEntry(id) {
-  return loadHistory()[id] ?? null;
-}
-
 function getRowHistoryEntry(row) {
   if (!row) return null;
   row.flightDate = getRowFlightDate(row);
   row.id = getRowId(row);
-  return getHistoryEntry(row.id) || null;
+  return findHGBSEntryForRow(row);
 }
 
 function getRowApiId(row) {
@@ -1131,7 +1153,7 @@ async function refreshRowsAfterHGBSAction() {
 }
 
 function removeFromHistory(id) {
-  const oldEntry = HISTORY_CACHE[id] || getHistoryEntry(id) || {};
+  const oldEntry = HISTORY_CACHE[id] || {};
   const now = new Date().toISOString();
 
   HISTORY_CACHE[id] = {
@@ -1141,15 +1163,6 @@ function removeFromHistory(id) {
     cancelledAt: now
   };
 }
-
-async function pruneOldHistory() {
-  // localStorage yok.
-  // Her yenilemede HGBS canlı sorgulanır.
-}
-
-
-
-
 
 // ─────────────────────────────────────────────
 //  API
@@ -1261,6 +1274,10 @@ function logout() {
   STATE.token = null;
   STATE.user  = { userName:'', taxFirmName:'', taxNumber:'', userType:'', userId:'', userProfileName:'' };
   STATE.rows  = [];
+  STATE.stationCode = 'AYT';
+  STATE.filters = { direction: 'ALL', comparison: 'ALL', process: 'ALL' };
+  STATE.filtersReady = false;
+  resetHGBSCaches();
   showLoginScreen();
 }
 
@@ -1277,24 +1294,9 @@ async function showMainScreen() {
   document.getElementById('loginSection').style.display = 'none';
   document.getElementById('mainSection').style.display  = 'block';
 
-  await refreshHistoryFromSheet();
-
-  pruneOldHistory();
   renderUserInfo();
   initToolbar();
-  openHistoryModal();
-}
-
-async function showMainScreen() {
-  document.getElementById('loginSection').style.display = 'none';
-  document.getElementById('mainSection').style.display  = 'block';
-
-  await refreshHistoryFromSheet();
-
-  pruneOldHistory();
-  renderUserInfo();
-  initToolbar();
-  openHistoryModal();
+  setFilterControlsEnabled(false);
 
   startHGSBAutoRefresh();
 }
@@ -1336,12 +1338,108 @@ function initToolbar() {
   const crewInput = document.getElementById('crewInput');
   if (crewInput) crewInput.value = STATE.crewNumber;
 
+  const stationInput = document.getElementById('stationInput');
+  if (stationInput) stationInput.value = STATE.stationCode;
+
   STATE.flightDate = todayStr();
 }
 
 function onCrewChange(val) {
   const n = parseInt(val, 10);
   if (!Number.isNaN(n) && n >= 0) STATE.crewNumber = n;
+}
+
+function setFilterControlsEnabled(enabled, message = '') {
+  STATE.filtersReady = Boolean(enabled);
+
+  const panel = document.getElementById('flightFilters');
+  if (panel) {
+    panel.classList.toggle('is-disabled', !enabled);
+    panel.setAttribute('aria-disabled', String(!enabled));
+  }
+
+  ['directionFilter', 'comparisonFilter', 'processFilter', 'filterResetBtn', 'searchInput']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !enabled;
+    });
+
+  const summary = document.getElementById('filterSummary');
+  if (summary && !enabled) {
+    summary.textContent = message || 'CSV yüklendikten sonra filtreler aktif olacak.';
+  }
+}
+
+function setComparisonBusy(busy) {
+  const stationInput = document.getElementById('stationInput');
+  const stationApplyBtn = document.getElementById('stationApplyBtn');
+  const csvBtn = document.getElementById('csvBtn');
+  if (stationInput) stationInput.disabled = busy;
+  if (stationApplyBtn) stationApplyBtn.disabled = busy;
+  if (csvBtn) csvBtn.disabled = busy;
+}
+
+function resetHGBSCaches() {
+  _hgsbCacheGeneration++;
+  HISTORY_CACHE = {};
+  HGBS_FLIGHT_CACHE = {};
+  HGBS_FETCHED_DATES = new Set();
+  HISTORY_READY = false;
+
+  STATE.rows.forEach(resetRowSubmissionState);
+}
+
+function updateRowsForStation(stationCode) {
+  STATE.rows.forEach(row => {
+    if (row.type === 'GELİŞ') row.arrivalAirport = stationCode;
+    if (row.type === 'GİDİŞ') row.departureAirport = stationCode;
+    row.id = getRowId(row);
+  });
+}
+
+async function onStationChange(rawValue) {
+  const input = document.getElementById('stationInput');
+  const candidate = String(rawValue || '').trim().toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(candidate)) {
+    if (input) input.value = STATE.stationCode;
+    showGlobalAlert('İstasyon kodu üç harften oluşmalıdır.', 'error');
+    return;
+  }
+
+  const stationChanged = candidate !== STATE.stationCode;
+  if (!stationChanged && (STATE.filtersReady || !STATE.rows.length)) return;
+
+  if (stationChanged) {
+    STATE.stationCode = candidate;
+    if (input) input.value = candidate;
+    updateRowsForStation(candidate);
+  }
+  resetHGBSCaches();
+
+  if (!STATE.rows.length) {
+    showGlobalAlert(`${candidate} seçildi. CSV yüklendiğinde bu istasyon sorgulanacak.`, 'info');
+    return;
+  }
+
+  setFilterControlsEnabled(false, `${candidate} için HGBS kayıtları karşılaştırılıyor...`);
+  setComparisonBusy(true);
+  renderTable();
+  showGlobalAlert(`${candidate} için HGBS kayıtları sorgulanıyor...`, 'info');
+
+  try {
+    await refreshHGBSFlightsForRows();
+    syncRowsWithHGBSHistory();
+    setFilterControlsEnabled(true);
+    renderTable();
+    showGlobalAlert(`${candidate} istasyonu için karşılaştırma tamamlandı.`, 'info');
+  } catch (err) {
+    setFilterControlsEnabled(false, 'HGBS karşılaştırması başarısız oldu. Uygula’ya basarak veya CSV’yi yeniden yükleyerek tekrar deneyin.');
+    renderTable();
+    showGlobalAlert(`${candidate} HGBS sorgusu başarısız: ${err.message}`, 'error');
+  } finally {
+    setComparisonBusy(false);
+  }
 }
 
 async function onRowDateChange(index, val) {
@@ -1355,7 +1453,7 @@ async function onRowDateChange(index, val) {
 
   try {
     showGlobalAlert(`${toHgbDate(row.flightDate)} için HGBS kayıtları sorgulanıyor...`, 'info');
-    await refreshHGBSFlightsForRows([row]);
+    await refreshHGBSFlightsForRows();
     syncRowsWithHGBSHistory();
     renderTable();
   } catch (err) {
@@ -1382,7 +1480,7 @@ async function onRowFlightNoChange(index, val) {
 
   try {
     showGlobalAlert(`${toHgbDate(row.flightDate)} tarihli ${row.flightNo} HGBS kayıtları sorgulanıyor...`, 'info');
-    await refreshHGBSFlightsForRows([row]);
+    await refreshHGBSFlightsForRows();
     syncRowsWithHGBSHistory();
     renderTable();
   } catch (err) {
@@ -1409,7 +1507,7 @@ async function onRowRegChange(index, val) {
 
   try {
     showGlobalAlert(`${toHgbDate(row.flightDate)} tarihli ${row.reg} HGBS kayıtları sorgulanıyor...`, 'info');
-    await refreshHGBSFlightsForRows([row]);
+    await refreshHGBSFlightsForRows();
     syncRowsWithHGBSHistory();
     renderTable();
   } catch (err) {
@@ -1424,33 +1522,53 @@ function handleFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
 
+  processCsvFile(file);
+}
+
+async function processCsvFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith('.csv')) {
+    showGlobalAlert('Lütfen .csv uzantılı bir dosya yükleyin.', 'error');
+    return;
+  }
+
   document.getElementById('fileName').textContent = file.name;
+  setFilterControlsEnabled(false, 'CSV okunuyor ve HGBS kayıtlarıyla karşılaştırılıyor...');
+  setComparisonBusy(true);
+  resetFlightFilters(false);
+  resetHGBSCaches();
 
-  const reader = new FileReader();
-  reader.readAsArrayBuffer(file);
+  try {
+    const buf = await file.arrayBuffer();
 
-  reader.onload = async e => {
-    try {
-      const buf = e.target.result;
+    // Prefer UTF-8; fall back to windows-1254 for legacy files
+    const utf8 = new TextDecoder('utf-8').decode(buf);
+    const csvText = (utf8.includes('GELİŞ') || utf8.includes('GİDİŞ'))
+      ? utf8
+      : new TextDecoder('windows-1254').decode(buf);
 
-      // Prefer UTF-8; fall back to windows-1254 for legacy files
-      const utf8 = new TextDecoder('utf-8').decode(buf);
-      const csvText = (utf8.includes('GELİŞ') || utf8.includes('GİDİŞ'))
-        ? utf8
-        : new TextDecoder('windows-1254').decode(buf);
+    parseCsv(csvText);
+    if (!STATE.rows.length) throw new Error('CSV içinde kullanılabilir geliş veya gidiş uçuşu bulunamadı.');
 
-      parseCsv(csvText);
-      showGlobalAlert('HGBS kayıtları satır tarihlerine göre canlı sorgulanıyor...', 'info');
-      await refreshHGBSFlightsForRows();
-      syncRowsWithHGBSHistory();
-      renderTable();
+    renderTable();
+    showGlobalAlert(`${STATE.stationCode} için HGBS kayıtları canlı sorgulanıyor...`, 'info');
+    await refreshHGBSFlightsForRows();
+    syncRowsWithHGBSHistory();
+    setFilterControlsEnabled(true);
+    renderTable();
 
-      showGlobalAlert('CSV yüklendi, satır tarihleri HGBS kayıtlarıyla karşılaştırıldı.', 'info');
-
-    } catch (err) {
-      showGlobalAlert('CSV işlenirken hata: ' + err.message, 'error');
-    }
-  };
+    showGlobalAlert('CSV yüklendi; HGBS’de eksik, CSV’de eksik ve süreç durumları karşılaştırıldı.', 'info');
+  } catch (err) {
+    const retryMessage = STATE.rows.length
+      ? 'HGBS karşılaştırması tamamlanamadı. Uygula’ya basarak yeniden deneyin.'
+      : 'CSV okunamadı. Dosyayı kontrol edip yeniden yükleyin.';
+    setFilterControlsEnabled(false, retryMessage);
+    renderTable();
+    showGlobalAlert('Karşılaştırma hatası: ' + err.message, 'error');
+  } finally {
+    setComparisonBusy(false);
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.value = '';
+  }
 }
 
 function parseCsv(csvText) {
@@ -1497,11 +1615,12 @@ function parseCsv(csvText) {
 
     const hgsbType = convertAircraftType(acType);
     const flightDate = todayStr();
+    const stationCode = STATE.stationCode;
 
     if (arrFlt && arrFlt !== '-') {
       const row = {
         type: 'GELİŞ', ac, flightDate, flightNo: normalizeFlightNo(arrFlt),
-        departureAirport: arrAirport, arrivalAirport: 'AYT',
+        departureAirport: arrAirport, arrivalAirport: stationCode,
         time: staTime, hgsbAircraftType: hgsbType, reg,
         _status: 'idle', _error: null, _result: null, _sentAt: null
       };
@@ -1513,7 +1632,7 @@ function parseCsv(csvText) {
     if (depFlt && depFlt !== '-') {
       const row = {
         type: 'GİDİŞ', ac, flightDate, flightNo: normalizeFlightNo(depFlt),
-        departureAirport: 'AYT', arrivalAirport: depAirport,
+        departureAirport: stationCode, arrivalAirport: depAirport,
         time: stdTime, hgsbAircraftType: hgsbType, reg,
         _status: 'idle', _error: null, _result: null, _sentAt: null
       };
@@ -1552,7 +1671,7 @@ function buildPayload(row, crewNum, captainName, etaValues) {
     return {
       ...base,
       flightTypeCode:      'GLS',
-      arrivalPortCode:     'AYT',
+      arrivalPortCode:     row.arrivalAirport,
       departurePortCode:   row.departureAirport,
       arrivalDateEta:      toHgsbIso(etaValues.arrivalDateEta, etaValues.arrivalTimeEta),
       arrivalDateEtaStr:   toHgsbDisplayDate(etaValues.arrivalDateEta),
@@ -1574,7 +1693,7 @@ function buildPayload(row, crewNum, captainName, etaValues) {
     ...base,
     flightTypeCode:      'GDS',
     arrivalPortCode:     row.arrivalAirport,
-    departurePortCode:   'AYT',
+    departurePortCode:   row.departureAirport,
     arrivalDateEta:      null,
     arrivalDateEtaStr:   '',
     arrivalTimeEta:      '',
@@ -1612,6 +1731,193 @@ function buildDefaultEtaValues(row) {
 }
 
 // ─────────────────────────────────────────────
+//  CSV ↔ HGBS reconciliation and filters
+// ─────────────────────────────────────────────
+function getHGBSEntryCanonicalKey(entry) {
+  if (!entry) return '';
+  if (entry.apiId) return `API|${entry.apiId}`;
+
+  const raw = entry.raw || {};
+  return [
+    entry.stationCode || STATE.stationCode,
+    entry.type,
+    entry.originalFlightNo || entry.flightNo,
+    normalizeReg(entry.reg),
+    entry.flightDate,
+    raw.departurePortCode || '',
+    raw.arrivalPortCode || ''
+  ].join('|');
+}
+
+function isEntryForSelectedStation(entry) {
+  if (!entry) return false;
+  const raw = entry.raw || {};
+  const expectedPort = entry.type === 'GELİŞ'
+    ? normalizeStationCode(raw.arrivalPortCode || entry.stationCode)
+    : normalizeStationCode(raw.departurePortCode || entry.stationCode);
+
+  return expectedPort === STATE.stationCode;
+}
+
+function buildHGBSOnlyRows() {
+  if (!STATE.filtersReady || !STATE.rows.length) return [];
+
+  const csvDates = new Set(STATE.rows.map(getRowFlightDate));
+  const matchedEntries = new Set();
+
+  STATE.rows.forEach(row => {
+    const entry = findHGBSEntryForRow(row);
+    if (entry) matchedEntries.add(getHGBSEntryCanonicalKey(entry));
+  });
+
+  const canonicalEntries = new Map();
+  Object.values(HGBS_FLIGHT_CACHE).forEach(entry => {
+    if (!entry || !csvDates.has(entry.flightDate) || !isEntryForSelectedStation(entry)) return;
+    const key = getHGBSEntryCanonicalKey(entry);
+    if (key && !canonicalEntries.has(key)) canonicalEntries.set(key, entry);
+  });
+
+  return Array.from(canonicalEntries.entries())
+    .filter(([key]) => !matchedEntries.has(key))
+    .map(([key, entry]) => {
+      const raw = entry.raw || {};
+      const isArrival = entry.type === 'GELİŞ';
+      const flightNo = entry.originalFlightNo || entry.flightNo || extractFlightNo(raw);
+      const airlinePrefix = splitFlightNo(flightNo).prefix || '-';
+
+      return {
+        id: `hgbs-only-${key}`,
+        _source: 'hgbs',
+        _comparison: 'csv_missing',
+        _historyEntry: entry,
+        _status: 'already_sent',
+        _result: { apiId: entry.apiId || '' },
+        _sentAt: entry.hgsbAt || '',
+        _error: null,
+        type: entry.type,
+        ac: raw.companyCode || raw.airlineCode || airlinePrefix,
+        flightDate: entry.flightDate,
+        flightNo,
+        departureAirport: raw.departurePortCode || raw.departureAirportCode || (isArrival ? '-' : STATE.stationCode),
+        arrivalAirport: raw.arrivalPortCode || raw.arrivalAirportCode || (isArrival ? STATE.stationCode : '-'),
+        time: isArrival
+          ? (raw.arrivalTimeEta || raw.arrivalTime || '-')
+          : (raw.departureTimeEta || raw.departureTime || '-'),
+        hgsbAircraftType: raw.airCraftTypeCode || raw.aircraftTypeCode || raw.aircraftType || '-',
+        reg: entry.reg || extractReg(raw) || '-'
+      };
+    });
+}
+
+function getComparisonItems() {
+  const csvItems = STATE.rows.map((row, sourceIndex) => {
+    const entry = findHGBSEntryForRow(row);
+
+    if (!STATE.filtersReady) row._comparison = 'pending';
+    else if (row._status === 'error') row._comparison = 'error';
+    else row._comparison = entry ? 'matched' : 'hgbs_missing';
+
+    return { row, sourceIndex, readonly: false };
+  });
+
+  const hgbsItems = buildHGBSOnlyRows().map(row => ({
+    row,
+    sourceIndex: null,
+    readonly: true
+  }));
+
+  return [...csvItems, ...hgbsItems];
+}
+
+function getRowProcessCategory(row) {
+  if (row._status === 'error' || row._comparison === 'error') return 'ERROR';
+  if (row._comparison === 'hgbs_missing' || row._status === 'idle') return 'NOT_SENT';
+  if (row._status === 'success') return 'SENT';
+  if (row._status === 'cancelled') return 'CANCELLED';
+
+  const code = getRowStatusCode(row);
+  if (code === 'TASLAK' || code === 'HGBS_FOUND') return 'SENT';
+  if (code === 'GUMRUGESUNULDU') return 'DECLARED';
+  if (code === 'KABULEDILDI') return 'APPROVED';
+  if (code === 'GERICEKILDI') return 'WITHDRAWN';
+  if (code === 'IPTALTALEBI') return 'CANCEL_REQUESTED';
+  if (isCancelledStatus(code)) return 'CANCELLED';
+  if (code === 'GERIGONDERILDI' || code === 'ONAYGERIGONDERILDI') return 'RETURNED';
+  if (code === 'GERIGONDERIMTALEBI' || code === 'ONAYGERIGONDERIMTALEBI') return 'RETURN_REQUESTED';
+  return code ? 'OTHER' : 'NOT_SENT';
+}
+
+function matchesComparisonFilter(row, value) {
+  if (value === 'ALL') return true;
+  if (value === 'PROBLEM') return ['hgbs_missing', 'csv_missing', 'error'].includes(row._comparison);
+  if (value === 'HGBS_MISSING') return row._comparison === 'hgbs_missing';
+  if (value === 'CSV_MISSING') return row._comparison === 'csv_missing';
+  if (value === 'ERROR') return row._comparison === 'error';
+  if (value === 'MATCHED') return row._comparison === 'matched';
+  return true;
+}
+
+function matchesSearch(row, query) {
+  if (!query) return true;
+  const haystack = [
+    row.type, row.ac, getRowFlightDate(row), row.flightNo,
+    row.departureAirport, row.arrivalAirport, row.time,
+    row.hgsbAircraftType, row.reg, row._status, row._error,
+    row._result?.apiId, getHGBSStatusLabel(row), getRowProcessCategory(row)
+  ].join(' ').toLocaleLowerCase('tr-TR');
+  return haystack.includes(query);
+}
+
+function getFilteredComparisonItems(items) {
+  if (!STATE.filtersReady) return items.filter(item => !item.readonly);
+
+  return items.filter(({ row }) => {
+    if (STATE.filters.direction !== 'ALL' && row.type !== STATE.filters.direction) return false;
+    if (!matchesComparisonFilter(row, STATE.filters.comparison)) return false;
+    if (STATE.filters.process !== 'ALL' && getRowProcessCategory(row) !== STATE.filters.process) return false;
+    return matchesSearch(row, _searchQuery);
+  });
+}
+
+function updateFilterSummary(allItems, visibleItems) {
+  const el = document.getElementById('filterSummary');
+  if (!el || !STATE.filtersReady) return;
+
+  const count = comparison => allItems.filter(item => item.row._comparison === comparison).length;
+  el.innerHTML = `
+    <strong>${visibleItems.length}</strong> / ${allItems.length} uçuş
+    <span>HGBS'de eksik: <b>${count('hgbs_missing')}</b></span>
+    <span>CSV'de eksik: <b>${count('csv_missing')}</b></span>
+    <span>Hatalı: <b>${count('error')}</b></span>
+  `;
+}
+
+function onFlightFilterChange() {
+  if (!STATE.filtersReady) return;
+  STATE.filters.direction = document.getElementById('directionFilter')?.value || 'ALL';
+  STATE.filters.comparison = document.getElementById('comparisonFilter')?.value || 'ALL';
+  STATE.filters.process = document.getElementById('processFilter')?.value || 'ALL';
+  renderTable();
+}
+
+function resetFlightFilters(shouldRender = true) {
+  STATE.filters = { direction: 'ALL', comparison: 'ALL', process: 'ALL' };
+  _searchQuery = '';
+
+  const values = {
+    directionFilter: 'ALL',
+    comparisonFilter: 'ALL',
+    processFilter: 'ALL',
+    searchInput: ''
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  if (shouldRender) renderTable();
+}
+
+// ─────────────────────────────────────────────
 //  Table rendering
 // ─────────────────────────────────────────────
 function renderTable() {
@@ -1628,54 +1934,74 @@ function renderTable() {
   empty.style.display     = 'none';
   container.style.display = 'block';
   tbody.innerHTML = '';
-  STATE.rows.forEach((row, i) => tbody.appendChild(buildRow(row, i)));
-  applySearch();
+
+  const allItems = getComparisonItems();
+  const visibleItems = getFilteredComparisonItems(allItems);
+
+  visibleItems.forEach(item => {
+    tbody.appendChild(buildRow(item.row, item.sourceIndex, item.readonly));
+  });
+
+  if (!visibleItems.length) {
+    tbody.innerHTML = '<tr class="filter-empty-row"><td colspan="11">Seçili filtrelere uyan uçuş bulunamadı.</td></tr>';
+  }
+
+  updateFilterSummary(allItems, visibleItems);
 }
 
-function buildRow(row, index) {
+function buildRow(row, index, readonly = false) {
   const tr = document.createElement('tr');
-  tr.id = `row-${index}`;
-  tr.className = row.type === 'GELİŞ' ? 'row-arrival' : 'row-departure';
+  tr.id = readonly ? `row-${row.id}` : `row-${index}`;
+  tr.className = `${row.type === 'GELİŞ' ? 'row-arrival' : 'row-departure'}${readonly ? ' row-csv-missing' : ''}`;
 
   const isArr = row.type === 'GELİŞ';
+  const dateCell = readonly
+    ? escapeHtml(getRowFlightDate(row))
+    : `<input class="row-input row-date-input" type="date"
+        value="${escapeHtml(getRowFlightDate(row))}"
+        onchange="onRowDateChange(${index}, this.value)">`;
+  const flightCell = readonly
+    ? `<strong>${escapeHtml(row.flightNo)}</strong>`
+    : `<input class="row-input row-flight-input" type="text"
+        value="${escapeHtml(row.flightNo)}"
+        oninput="this.value=this.value.toUpperCase()"
+        onchange="onRowFlightNoChange(${index}, this.value)"
+        onkeydown="if(event.key==='Enter') this.blur()">`;
+  const regCell = readonly
+    ? `<strong>${escapeHtml(row.reg)}</strong>`
+    : `<input class="row-input row-reg-input" type="text"
+        value="${escapeHtml(row.reg)}"
+        oninput="this.value=this.value.toUpperCase().replace(/\\s+/g,'')"
+        onchange="onRowRegChange(${index}, this.value)"
+        onkeydown="if(event.key==='Enter') this.blur()">`;
 
   tr.innerHTML = `
     <td><span class="badge ${isArr ? 'badge-arr' : 'badge-dep'}">${isArr ? '↘ GELİŞ' : '↗ GİDİŞ'}</span></td>
     <td>${escapeHtml(row.ac)}</td>
-    <td>
-      <input class="row-input row-date-input" type="date"
-        value="${escapeHtml(getRowFlightDate(row))}"
-        onchange="onRowDateChange(${index}, this.value)">
-    </td>
-    <td>
-      <input class="row-input row-flight-input" type="text"
-        value="${escapeHtml(row.flightNo)}"
-        oninput="this.value=this.value.toUpperCase()"
-        onchange="onRowFlightNoChange(${index}, this.value)"
-        onkeydown="if(event.key==='Enter') this.blur()">
-    </td>
+    <td>${dateCell}</td>
+    <td>${flightCell}</td>
     <td>${escapeHtml(row.departureAirport)}</td>
     <td>${escapeHtml(row.arrivalAirport)}</td>
     <td>${escapeHtml(row.time)}</td>
     <td>${escapeHtml(row.hgsbAircraftType)}</td>
-    <td>
-      <input class="row-input row-reg-input" type="text"
-        value="${escapeHtml(row.reg)}"
-        oninput="this.value=this.value.toUpperCase().replace(/\\s+/g,'')"
-        onchange="onRowRegChange(${index}, this.value)"
-        onkeydown="if(event.key==='Enter') this.blur()">
-    </td>
-    <td id="status-${index}">${renderStatus(row, index)}</td>
-    <td class="action-cell" id="action-${index}">${renderAction(row, index)}</td>
+    <td>${regCell}</td>
+    <td${readonly ? '' : ` id="status-${index}"`}>${renderStatus(row, index)}</td>
+    <td class="action-cell"${readonly ? '' : ` id="action-${index}"`}>${renderAction(row, index)}</td>
   `;
 
   return tr;
 }
 
 function renderStatus(row, index) {
+  if (row._comparison === 'csv_missing') {
+    return `<span class="status-badge status-csv-missing">🟣 CSV'de Eksik · ${escapeHtml(getHGBSStatusLabel(row))}</span>`;
+  }
+
   switch (row._status) {
     case 'idle':
-      return '<span class="status-badge status-idle">⚪ Bekliyor</span>';
+      return row._comparison === 'hgbs_missing'
+        ? '<span class="status-badge status-hgbs-missing">🟠 HGBS\'de Eksik</span>'
+        : '<span class="status-badge status-idle">⚪ Bekliyor</span>';
     case 'sending':
       return '<span class="status-badge status-sending"><span class="spinner"></span> Gönderiliyor</span>';
     case 'success':
@@ -1692,6 +2018,10 @@ function renderStatus(row, index) {
 }
 
 function renderAction(row, index) {
+  if (row._comparison === 'csv_missing') {
+    return '<span class="comparison-note">HGBS kaydı · CSV satırı yok</span>';
+  }
+
   const isArr = row.type === 'GELİŞ';
   const icon  = isArr ? '↘' : '↗';
   const typeClass = isArr ? 'send-btn-arr' : 'send-btn-dep';
@@ -1732,6 +2062,11 @@ function renderAction(row, index) {
 }
 
 function updateRow(index) {
+  if (STATE.filtersReady) {
+    renderTable();
+    return;
+  }
+
   const row = STATE.rows[index];
   const statusEl = document.getElementById(`status-${index}`);
   const actionEl = document.getElementById(`action-${index}`);
@@ -3395,99 +3730,15 @@ function closeErrorModal() {
 let _searchQuery = '';
 
 function onSearch(val) {
-  _searchQuery = val.trim().toLowerCase();
-  applySearch();
-}
-
-function applySearch() {
-  const q = _searchQuery;
-  document.querySelectorAll('#tableBody tr').forEach((tr, i) => {
-    if (!q) { tr.style.display = ''; return; }
-    const row = STATE.rows[i];
-    if (!row) return;
-    const haystack = [
-      row.type, row.ac, getRowFlightDate(row), row.flightNo,
-      row.departureAirport, row.arrivalAirport, row.time,
-      row.hgsbAircraftType, row.reg,
-      row._status, row._error, row._result?.apiId
-    ].join(' ').toLowerCase();
-    tr.style.display = haystack.includes(q) ? '' : 'none';
-  });
-}
-
-// ─────────────────────────────────────────────
-//  History modal
-// ─────────────────────────────────────────────
-function openHistoryModal() {
-  const history = loadHistory();
-  const entries = Object.entries(history);
-
-  let html;
-  if (!entries.length) {
-    html = '<div class="hist-empty">Henüz gönderim kaydı yok.</div>';
-  } else {
-    const rows = entries
-      .sort((a, b) => (b[1].sentAt || '').localeCompare(a[1].sentAt || ''))
-      .map(([, e]) => {
-        const isArr = e.type === 'GELİŞ';
-        const badge = isArr
-          ? `<span class="badge badge-arr">↘ GELİŞ</span>`
-          : `<span class="badge badge-dep">↗ GİDİŞ</span>`;
-        const sentAt = e.sentAt ? new Date(e.sentAt).toLocaleString('tr-TR') : '—';
-        const flightDate = e.flightDate ? toHgbDate(e.flightDate) : '—';
-        return `<tr>
-          <td>${badge}</td>
-          <td>${escapeHtml(flightDate)}</td>
-          <td><strong>${escapeHtml(e.flightNo || '—')}</strong></td>
-          <td>${escapeHtml(e.reg || '—')}</td>
-          <td><code style="font-size:11px">${escapeHtml(e.apiId || '—')}</code></td>
-          <td style="color:#64748b;font-size:12px">${escapeHtml(sentAt)}</td>
-        </tr>`;
-      }).join('');
-
-    html = `<table class="hist-table">
-      <thead><tr>
-        <th>Tip</th><th>Tarih</th><th>Uçuş No</th><th>REG</th><th>API ID</th><th>Gönderim Zamanı</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-  }
-
-  document.getElementById('historyModalBody').innerHTML = html;
-  document.getElementById('historyOverlay').classList.remove('hidden');
-}
-
-function closeHistoryModal() {
-  document.getElementById('historyOverlay').classList.add('hidden');
-}
-
-function confirmClearHistory() {
-  document.getElementById('confirmOverlay').classList.remove('hidden');
-}
-
-function closeConfirm() {
-  document.getElementById('confirmOverlay').classList.add('hidden');
-}
-
-function clearHistory() {
-  localStorage.removeItem(KEY_HISTORY);
-  STATE.rows.forEach(r => {
-    if (r._status === 'already_sent') {
-      r._status = 'idle';
-      r._result = null;
-      r._sentAt = null;
-    }
-  });
-  closeConfirm();
-  renderTable();
-  showGlobalAlert('Gönderim geçmişi temizlendi.', 'info');
+  _searchQuery = val.trim().toLocaleLowerCase('tr-TR');
+  if (STATE.filtersReady) renderTable();
 }
 
 // ─────────────────────────────────────────────
 //  Keyboard shortcuts
 // ─────────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeConfirm(); closeErrorModal(); closeResultModal(); closeCancelModal(); closeHistoryModal(); }
+  if (e.key === 'Escape') { closeModal(); closeErrorModal(); closeResultModal(); closeCancelModal(); }
   if (e.key === 'Enter' && document.getElementById('loginSection').style.display !== 'none') {
     doLogin();
   }
@@ -3496,9 +3747,6 @@ document.addEventListener('keydown', e => {
 // Close modal on overlay click
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('modalOverlay')) closeModal();
-});
-document.getElementById('confirmOverlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('confirmOverlay')) closeConfirm();
 });
 document.getElementById('errorOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('errorOverlay')) closeErrorModal();
@@ -3515,10 +3763,6 @@ document.getElementById('crewBeyanOverlay').addEventListener('click', e => {
 document.getElementById('cancelOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('cancelOverlay')) closeCancelModal();
 });
-document.getElementById('historyOverlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('historyOverlay')) closeHistoryModal();
-});
-
 // ─── Drag & drop ───
 const dropZone = document.getElementById('tableEmpty');
 
@@ -3536,29 +3780,11 @@ dropZone.addEventListener('drop', e => {
   dropZone.classList.remove('drag-over');
   const file = e.dataTransfer.files[0];
   if (!file) return;
-  if (!file.name.endsWith('.csv')) {
+  if (!file.name.toLowerCase().endsWith('.csv')) {
     showGlobalAlert('Lütfen .csv uzantılı bir dosya yükleyin.', 'error');
     return;
   }
-  document.getElementById('fileName').textContent = file.name;
-  const reader = new FileReader();
-  reader.readAsArrayBuffer(file);
-  reader.onload = async ev => {
-    try {
-      const buf = ev.target.result;
-      const utf8 = new TextDecoder('utf-8').decode(buf);
-      const csvText = (utf8.includes('GELİŞ') || utf8.includes('GİDİŞ'))
-        ? utf8 : new TextDecoder('windows-1254').decode(buf);
-      parseCsv(csvText);
-      showGlobalAlert('HGBS kayıtları satır tarihlerine göre canlı sorgulanıyor...', 'info');
-      await refreshHGBSFlightsForRows();
-      syncRowsWithHGBSHistory();
-      renderTable();
-      showGlobalAlert('CSV yüklendi, satır tarihleri HGBS kayıtlarıyla karşılaştırıldı.', 'info');
-    } catch (err) {
-      showGlobalAlert('CSV işlenirken hata: ' + err.message, 'error');
-    }
-  };
+  processCsvFile(file);
 });
 
 // ─────────────────────────────────────────────
@@ -3596,7 +3822,5 @@ init();
 <script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/sxs.js?v=20260622-5"></script>
 <script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/gendec-core.js?v=20260622-5"></script>
 
-</body>
-</html>
 </body>
 </html>
