@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HGBS</title>
-  <meta name="app-version" content="v1.3.1beta">
+  <meta name="app-version" content="v1.3.2beta">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css?v=v1.3.1beta">
 </head>
 <body>
@@ -15,7 +15,7 @@
   <div class="login-card">
     <h1>TGS HGSB Gönderim</h1>
     <p>Devam etmek için sisteme giriş yapın.</p>
-    <span class="app-version-badge">v1.3.1beta</span>
+    <span class="app-version-badge">v1.3.2beta</span>
 
     <div id="loginAlert"></div>
 
@@ -55,7 +55,7 @@
       </div>
     </div>
     <div class="topbar-right">
-      <span class="app-version-badge">v1.3.1beta</span>
+      <span class="app-version-badge">v1.3.2beta</span>
       <button id="logoutBtn" onclick="logout()">Çıkış Yap</button>
     </div>
   </div>
@@ -379,7 +379,7 @@
 //  Constants
 // ─────────────────────────────────────────────
 const MOCK_MODE    = false;   // ← test MOD
-const APP_VERSION  = 'v1.3.1beta';
+const APP_VERSION  = 'v1.3.2beta';
 const BASE_URL     = 'https://hgbsapi.ticaret.gov.tr';
 const KEY_TOKEN    = 'tgs_bearer';
 const KEY_USER     = 'tgs_user';
@@ -598,6 +598,44 @@ function parseHGBSDateOnly(...values) {
   }
 
   return '';
+}
+
+function parseHGBSTimeOnly(...values) {
+  for (const value of values) {
+    const raw = String(value || '').trim();
+    if (!raw) continue;
+
+    const match = raw.match(/(?:^|[T\s])([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?/);
+    if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+  }
+
+  return '';
+}
+
+function getHGBSFlightDisplayTime(f, flightTypeCode) {
+  const type = normalizeStatus(flightTypeCode || f?.flightTypeCode || '');
+
+  if (type === 'GLS') {
+    return parseHGBSTimeOnly(
+      f?.arrivalDateStr,
+      f?.arrivalTimeEta,
+      f?.arrivalTime,
+      f?.arrivalDateEtaStr,
+      f?.arrivalDateEta
+    ) || '-';
+  }
+
+  if (type === 'GDS') {
+    return parseHGBSTimeOnly(
+      f?.departureDateStr,
+      f?.departureTimeEta,
+      f?.departureTime,
+      f?.departureDateEtaStr,
+      f?.departureDateEta
+    ) || '-';
+  }
+
+  return '-';
 }
 
 function addDaysToFlightDate(dateVal, offset) {
@@ -1921,10 +1959,8 @@ function buildHGBSOnlyRows() {
         flightNo,
         departureAirport: raw.departurePortCode || raw.departureAirportCode || (isArrival ? '-' : STATE.stationCode),
         arrivalAirport: raw.arrivalPortCode || raw.arrivalAirportCode || (isArrival ? STATE.stationCode : '-'),
-        time: isArrival
-          ? (raw.arrivalTimeEta || raw.arrivalTime || '-')
-          : (raw.departureTimeEta || raw.departureTime || '-'),
-        hgsbAircraftType: raw.airCraftTypeCode || raw.aircraftTypeCode || raw.aircraftType || '-',
+        time: getHGBSFlightDisplayTime(raw, isArrival ? 'GLS' : 'GDS'),
+        hgsbAircraftType: '-',
         reg: entry.reg || extractReg(raw) || '-',
         harekatci: '-'
       };
