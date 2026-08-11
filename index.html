@@ -64,8 +64,8 @@
 
     <!-- Toolbar -->
     <div class="toolbar">
-      <button id="csvBtn" onclick="document.getElementById('fileInput').click()">CSV Seç</button>
-      <input type="file" id="fileInput" accept=".csv" style="display:none" onchange="handleFileSelect(event)">
+      <button id="excelBtn" onclick="document.getElementById('fileInput').click()">Excel Seç</button>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none" onchange="handleFileSelect(event)">
       <span id="fileName" style="font-size:12px;color:#64748b;"></span>
 
       <div class="toolbar-sep"></div>
@@ -91,7 +91,7 @@
       <div class="toolbar-sep"></div>
 
       <input type="search" class="search-input" id="searchInput"
-        placeholder="Uçuş, REG veya meydan ara" oninput="onSearch(this.value)" disabled>
+        placeholder="Uçuş, REG, harekatçı veya meydan ara" oninput="onSearch(this.value)" disabled>
     </div>
 
     <div class="filter-panel is-disabled" id="flightFilters" aria-disabled="true">
@@ -110,7 +110,7 @@
           <option value="ALL">Tümü</option>
           <option value="PROBLEM">Sorunlular</option>
           <option value="HGBS_MISSING">HGBS'de Eksik</option>
-          <option value="CSV_MISSING">CSV'de Eksik</option>
+          <option value="EXCEL_MISSING">Excel'de Eksik</option>
           <option value="ERROR">Hatalı</option>
           <option value="MATCHED">Eşleşenler</option>
         </select>
@@ -138,14 +138,14 @@
         Filtreleri Temizle
       </button>
 
-      <div class="filter-summary" id="filterSummary">CSV yüklendikten sonra filtreler aktif olacak.</div>
+      <div class="filter-summary" id="filterSummary">Excel yüklendikten sonra filtreler aktif olacak.</div>
     </div>
 
     <!-- Table -->
     <div class="table-wrap">
       <div class="drop-zone" id="tableEmpty" onclick="document.getElementById('fileInput').click()">
         <div class="dz-icon">📂</div>
-        <div class="dz-title">CSV dosyasını buraya sürükleyin</div>
+        <div class="dz-title">Excel dosyasını buraya sürükleyin</div>
         <div class="dz-sub">veya tıklayarak seçin</div>
         <div class="dz-btn">Dosya Seç</div>
       </div>
@@ -162,6 +162,7 @@
               <th>SAAT</th>
               <th>UÇAK TİPİ</th>
               <th>REG</th>
+              <th>HAREKATÇI</th>
               <th>DURUM</th>
               <th>İŞLEM</th>
             </tr>
@@ -381,7 +382,18 @@ const KEY_USER     = 'tgs_user';
 const HGSB_AUTO_REFRESH_MS = 30 * 1000; // 30 saniye
 
 
-const REQUIRED_COLS = ['A/C', 'GELİŞ', 'GİDİŞ', 'STA', 'STD', 'TIP', 'REG'];
+const FLIGHT_EXCEL_COLUMNS = Object.freeze({
+  companyCode: 0,       // A - ICAO / A/C
+  arrivalFlightNo: 1,   // B - Geliş uçuş no
+  departureFlightNo: 2, // C - Gidiş uçuş no
+  arrivalOrigin: 7,     // H - Geliş kalkış istasyonu
+  arrivalTime: 8,       // I - STA
+  departureTime: 9,     // J - STD
+  departureDestination: 10, // K - Gidiş varış istasyonu
+  aircraftType: 13,     // N - Uçak tipi
+  registration: 15,     // P - REG
+  handler: 17           // R - HRK / Harekatçı
+});
 
 const NATIONALITY_PREFIX_MAP = {
   'TC':'TR','RA':'RU','LZ':'BG','ER':'MD','YR':'RO',
@@ -440,8 +452,8 @@ function escapeHtml(v) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
-function convertAircraftType(csvType) {
-  const t = String(csvType ?? '').trim().toUpperCase().replace(/\s+/g,'');
+function convertAircraftType(sourceType) {
+  const t = String(sourceType ?? '').trim().toUpperCase().replace(/\s+/g,'');
   const map = {
     'A320-1':'A320-320','A320-2':'A320-200',
     'A321-1':'A321-321','A321-2':'A321-200','A321NEO':'A21N-32Q',
@@ -470,7 +482,7 @@ function getNationalityCode(tailNumber) {
   return NATIONALITY_PREFIX_MAP[reg.substring(0, 2)] ?? 'TR';
 }
 
-function normalizeCsvTimeForInput(timeValue) {
+function normalizeScheduleTimeForInput(timeValue) {
   const v = String(timeValue ?? '').trim();
   if (!v || v === '-') return '';
   const m = v.match(/^(\d{1,2})[:.](\d{2})$/);
@@ -1364,17 +1376,17 @@ function setFilterControlsEnabled(enabled, message = '') {
 
   const summary = document.getElementById('filterSummary');
   if (summary && !enabled) {
-    summary.textContent = message || 'CSV yüklendikten sonra filtreler aktif olacak.';
+    summary.textContent = message || 'Excel yüklendikten sonra filtreler aktif olacak.';
   }
 }
 
 function setComparisonBusy(busy) {
   const stationInput = document.getElementById('stationInput');
   const stationApplyBtn = document.getElementById('stationApplyBtn');
-  const csvBtn = document.getElementById('csvBtn');
+  const excelBtn = document.getElementById('excelBtn');
   if (stationInput) stationInput.disabled = busy;
   if (stationApplyBtn) stationApplyBtn.disabled = busy;
-  if (csvBtn) csvBtn.disabled = busy;
+  if (excelBtn) excelBtn.disabled = busy;
 }
 
 function resetHGBSCaches() {
@@ -1415,7 +1427,7 @@ async function onStationChange(rawValue) {
   resetHGBSCaches();
 
   if (!STATE.rows.length) {
-    showGlobalAlert(`${candidate} seçildi. CSV yüklendiğinde bu istasyon sorgulanacak.`, 'info');
+    showGlobalAlert(`${candidate} seçildi. Excel yüklendiğinde bu istasyon sorgulanacak.`, 'info');
     return;
   }
 
@@ -1431,7 +1443,7 @@ async function onStationChange(rawValue) {
     renderTable();
     showGlobalAlert(`${candidate} istasyonu için karşılaştırma tamamlandı.`, 'info');
   } catch (err) {
-    setFilterControlsEnabled(false, 'HGBS karşılaştırması başarısız oldu. Uygula’ya basarak veya CSV’yi yeniden yükleyerek tekrar deneyin.');
+    setFilterControlsEnabled(false, 'HGBS karşılaştırması başarısız oldu. Uygula’ya basarak veya Excel’i yeniden yükleyerek tekrar deneyin.');
     renderTable();
     showGlobalAlert(`${candidate} HGBS sorgusu başarısız: ${err.message}`, 'error');
   } finally {
@@ -1513,36 +1525,42 @@ async function onRowRegChange(index, val) {
 }
 
 // ─────────────────────────────────────────────
-//  CSV Parsing
+//  Excel flight import
 // ─────────────────────────────────────────────
 function handleFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  processCsvFile(file);
+  processExcelFile(file);
 }
 
-async function processCsvFile(file) {
-  if (!file || !file.name.toLowerCase().endsWith('.csv')) {
-    showGlobalAlert('Lütfen .csv uzantılı bir dosya yükleyin.', 'error');
+function isExcelFile(file) {
+  return !!file && /\.(xlsx|xls)$/i.test(file.name || '');
+}
+
+async function processExcelFile(file) {
+  if (!isExcelFile(file)) {
+    showGlobalAlert('Lütfen .xlsx veya .xls uzantılı bir Excel dosyası yükleyin.', 'error');
     return;
   }
 
   document.getElementById('fileName').textContent = file.name;
-  setFilterControlsEnabled(false, 'CSV okunuyor ve HGBS kayıtlarıyla karşılaştırılıyor...');
+  setFilterControlsEnabled(false, 'Excel okunuyor ve HGBS kayıtlarıyla karşılaştırılıyor...');
   setComparisonBusy(true);
   resetFlightFilters(false);
   resetHGBSCaches();
+  STATE.rows = [];
 
   try {
-    const buf = await file.arrayBuffer();
-    const utf8 = new TextDecoder('utf-8').decode(buf);
-    const csvText = (utf8.includes('GELİŞ') || utf8.includes('GİDİŞ'))
-      ? utf8
-      : new TextDecoder('windows-1254').decode(buf);
+    const imported = await readFlightExcelFile(file);
+    STATE.rows = imported.rows;
 
-    parseCsv(csvText);
-    if (!STATE.rows.length) throw new Error('CSV içinde kullanılabilir geliş veya gidiş uçuşu bulunamadı.');
+    STATE.rows.forEach(row => {
+      row.id = getRowId(row);
+      applyHistoryToRow(row);
+    });
+
+    if (!STATE.rows.length) throw new Error('Excel içinde kullanılabilir geliş veya gidiş uçuşu bulunamadı.');
 
     renderTable();
     showGlobalAlert(`${STATE.stationCode} için HGBS kayıtları canlı sorgulanıyor...`, 'info');
@@ -1551,11 +1569,11 @@ async function processCsvFile(file) {
     setFilterControlsEnabled(true);
     renderTable();
 
-    showGlobalAlert('CSV yüklendi; HGBS’de eksik, CSV’de eksik ve süreç durumları karşılaştırıldı.', 'info');
+    showGlobalAlert(`${imported.sheetName} sayfası yüklendi; HGBS’de eksik, Excel’de eksik ve süreç durumları karşılaştırıldı.`, 'info');
   } catch (err) {
     const retryMessage = STATE.rows.length
       ? 'HGBS karşılaştırması tamamlanamadı. Uygula’ya basarak yeniden deneyin.'
-      : 'CSV okunamadı. Dosyayı kontrol edip yeniden yükleyin.';
+      : 'Excel okunamadı. Dosyayı ve ilk sayfadaki kolonları kontrol edip yeniden yükleyin.';
     setFilterControlsEnabled(false, retryMessage);
     renderTable();
     showGlobalAlert('Karşılaştırma hatası: ' + err.message, 'error');
@@ -1566,76 +1584,168 @@ async function processCsvFile(file) {
   }
 }
 
-function parseCsv(csvText) {
-  const lines = csvText.split('\n');
-  STATE.rows = [];
-  let colMap = null;
+async function readFlightExcelFile(file) {
+  if (!window.XLSX) throw new Error('XLSX kütüphanesi yüklenmemiş.');
 
-  for (const line of lines) {
-    const cols = line.split(';').map(c => c.trim().replace(/^"|"$/g, ''));
-    if (cols.every(c => c === '') || cols.length < 3) continue;
+  const arrayBuffer = await file.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, {
+    type: 'array',
+    cellDates: true,
+    sheets: 0
+  });
 
-    // Header row detection
-    if (cols[0] === 'A/C' || cols.includes('GELİŞ')) {
-      colMap = {};
-      cols.forEach((name, i) => { colMap[name.trim().toUpperCase()] = i; });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error('Excel içinde ilk sayfa bulunamadı.');
 
-      // Validate required columns
-      const missing = REQUIRED_COLS.filter(n => colMap[n.toUpperCase()] === undefined);
-      if (missing.length) {
-        throw new Error('CSV\'de zorunlu kolon(lar) bulunamadı: ' + missing.join(', '));
-      }
-      continue;
+  const sheet = workbook.Sheets[sheetName];
+  const matrix = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    defval: '',
+    raw: false,
+    blankrows: false
+  });
+
+  const flightDate = getFlightDateFromExcel(matrix, file.name);
+  return {
+    sheetName,
+    flightDate,
+    rows: parseFlightExcelMatrix(matrix, flightDate)
+  };
+}
+
+function parseFlightExcelMatrix(matrix, flightDate) {
+  const headerIndex = findFlightExcelHeaderRow(matrix);
+  if (headerIndex < 0) {
+    throw new Error('İlk sayfada A/C, GELİŞ, GİDİŞ, REG ve HRK başlıkları bulunamadı.');
+  }
+
+  const rows = [];
+  const c = FLIGHT_EXCEL_COLUMNS;
+  const stationCode = STATE.stationCode;
+
+  for (let rowIndex = headerIndex + 1; rowIndex < matrix.length; rowIndex++) {
+    const cells = matrix[rowIndex] || [];
+    const arrivalFlightNo = normalizeFlightNo(getFlightExcelCell(cells, c.arrivalFlightNo));
+    const departureFlightNo = normalizeFlightNo(getFlightExcelCell(cells, c.departureFlightNo));
+
+    if (!arrivalFlightNo && !departureFlightNo) continue;
+
+    const companyCode = normalizeStatus(getFlightExcelCell(cells, c.companyCode)) || '-';
+    const aircraftType = getFlightExcelCell(cells, c.aircraftType) || '-';
+    const registration = normalizeReg(getFlightExcelCell(cells, c.registration)) || '-';
+    const handler = normalizeHandlerText(getFlightExcelCell(cells, c.handler));
+    const hgsbAircraftType = convertAircraftType(aircraftType);
+
+    if (arrivalFlightNo) {
+      rows.push({
+        type: 'GELİŞ',
+        ac: companyCode,
+        flightDate,
+        flightNo: arrivalFlightNo,
+        departureAirport: normalizeStatus(getFlightExcelCell(cells, c.arrivalOrigin)) || '-',
+        arrivalAirport: stationCode,
+        time: normalizeFlightExcelTime(getFlightExcelCell(cells, c.arrivalTime)) || '-',
+        hgsbAircraftType,
+        reg: registration,
+        harekatci: handler,
+        _sourceRow: rowIndex + 1,
+        _status: 'idle',
+        _error: null,
+        _result: null,
+        _sentAt: null
+      });
     }
 
-    if (!colMap) continue;
-
-    // Helper: read by header name or fallback index
-    const col = (name, fallback) => {
-      const idx = colMap[name.toUpperCase()];
-      return ((idx !== undefined ? cols[idx] : cols[fallback]) ?? '').trim() || '';
-    };
-
-    const ac      = col('A/C', 0)    || '-';
-    const arrFlt  = col('GELİŞ', 1);
-    const depFlt  = col('GİDİŞ', 2);
-    const acType  = col('TIP', 13)   || '-';
-    const reg     = col('REG', 15)   || '-';
-    const staTime = col('STA', 8)    || '-';
-    const stdTime = col('STD', 9)    || '-';
-
-    // G1 appears twice — must use direct index (colMap would give the last one)
-    const arrAirport = (cols[7] || '').trim() || '-';   // GELİŞ kalkış meydanı
-    const depAirport = (cols[10] || '').trim() || '-';  // GİDİŞ varış meydanı
-
-    const hgsbType = convertAircraftType(acType);
-    const flightDate = todayStr();
-    const stationCode = STATE.stationCode;
-
-    if (arrFlt && arrFlt !== '-') {
-      const row = {
-        type: 'GELİŞ', ac, flightDate, flightNo: normalizeFlightNo(arrFlt),
-        departureAirport: arrAirport, arrivalAirport: stationCode,
-        time: staTime, hgsbAircraftType: hgsbType, reg,
-        _status: 'idle', _error: null, _result: null, _sentAt: null
-      };
-      row.id = getRowId(row);
-      applyHistoryToRow(row);
-      STATE.rows.push(row);
-    }
-
-    if (depFlt && depFlt !== '-') {
-      const row = {
-        type: 'GİDİŞ', ac, flightDate, flightNo: normalizeFlightNo(depFlt),
-        departureAirport: stationCode, arrivalAirport: depAirport,
-        time: stdTime, hgsbAircraftType: hgsbType, reg,
-        _status: 'idle', _error: null, _result: null, _sentAt: null
-      };
-      row.id = getRowId(row);
-      applyHistoryToRow(row);
-      STATE.rows.push(row);
+    if (departureFlightNo) {
+      rows.push({
+        type: 'GİDİŞ',
+        ac: companyCode,
+        flightDate,
+        flightNo: departureFlightNo,
+        departureAirport: stationCode,
+        arrivalAirport: normalizeStatus(getFlightExcelCell(cells, c.departureDestination)) || '-',
+        time: normalizeFlightExcelTime(getFlightExcelCell(cells, c.departureTime)) || '-',
+        hgsbAircraftType,
+        reg: registration,
+        harekatci: handler,
+        _sourceRow: rowIndex + 1,
+        _status: 'idle',
+        _error: null,
+        _result: null,
+        _sentAt: null
+      });
     }
   }
+
+  return rows;
+}
+
+function findFlightExcelHeaderRow(matrix) {
+  const c = FLIGHT_EXCEL_COLUMNS;
+
+  return matrix.findIndex(row => {
+    const cells = row || [];
+    return normalizeFlightExcelHeader(cells[c.companyCode]) === 'AC' &&
+      normalizeFlightExcelHeader(cells[c.arrivalFlightNo]) === 'GELIS' &&
+      normalizeFlightExcelHeader(cells[c.departureFlightNo]) === 'GIDIS' &&
+      normalizeFlightExcelHeader(cells[c.registration]) === 'REG' &&
+      ['HRK', 'HAREKATCI'].includes(normalizeFlightExcelHeader(cells[c.handler]));
+  });
+}
+
+function normalizeFlightExcelHeader(value) {
+  return String(value || '')
+    .trim()
+    .toLocaleUpperCase('tr-TR')
+    .replace(/Ç/g, 'C').replace(/Ğ/g, 'G').replace(/İ/g, 'I')
+    .replace(/Ö/g, 'O').replace(/Ş/g, 'S').replace(/Ü/g, 'U')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function getFlightExcelCell(row, index) {
+  return String(row?.[index] ?? '').trim();
+}
+
+function normalizeFlightExcelDate(value, fallback = '') {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return [
+      value.getFullYear(),
+      String(value.getMonth() + 1).padStart(2, '0'),
+      String(value.getDate()).padStart(2, '0')
+    ].join('-');
+  }
+
+  const text = String(value || '').trim();
+  let match = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+
+  match = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})/);
+  if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+
+  return fallback;
+}
+
+function getFlightDateFromExcel(matrix, fileName) {
+  for (let i = 0; i < Math.min(matrix.length, 5); i++) {
+    const date = normalizeFlightExcelDate(matrix[i]?.[0], '');
+    if (date) return date;
+  }
+
+  return normalizeFlightExcelDate(fileName, todayStr());
+}
+
+function normalizeFlightExcelTime(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  const match = text.match(/^(\d{1,2})[:.](\d{2})(?::\d{2})?$/);
+  if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+
+  return normalizeScheduleTimeForInput(text);
+}
+
+function normalizeHandlerText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
 }
 
 // ─────────────────────────────────────────────
@@ -1706,7 +1816,7 @@ function buildPayload(row, crewNum, captainName, etaValues) {
 
 function buildDefaultEtaValues(row) {
   const today = getRowFlightDate(row);
-  const time  = normalizeCsvTimeForInput(row.time);
+  const time  = normalizeScheduleTimeForInput(row.time);
   const m3 = subtractHoursFromDateTime(today, time, 3);
   const p3 = subtractHoursFromDateTime(today, time, -3);
   if (row.type === 'GELİŞ') {
@@ -1726,7 +1836,7 @@ function buildDefaultEtaValues(row) {
 }
 
 // ─────────────────────────────────────────────
-//  CSV ↔ HGBS reconciliation and filters
+//  Excel ↔ HGBS reconciliation and filters
 // ─────────────────────────────────────────────
 function getHGBSEntryCanonicalKey(entry) {
   if (!entry) return '';
@@ -1757,7 +1867,7 @@ function isEntryForSelectedStation(entry) {
 function buildHGBSOnlyRows() {
   if (!STATE.filtersReady || !STATE.rows.length) return [];
 
-  const csvDates = new Set(STATE.rows.map(getRowFlightDate));
+  const excelDates = new Set(STATE.rows.map(getRowFlightDate));
   const matchedEntries = new Set();
 
   STATE.rows.forEach(row => {
@@ -1767,7 +1877,7 @@ function buildHGBSOnlyRows() {
 
   const canonicalEntries = new Map();
   Object.values(HGBS_FLIGHT_CACHE).forEach(entry => {
-    if (!entry || !csvDates.has(entry.flightDate) || !isEntryForSelectedStation(entry)) return;
+    if (!entry || !excelDates.has(entry.flightDate) || !isEntryForSelectedStation(entry)) return;
     const key = getHGBSEntryCanonicalKey(entry);
     if (key && !canonicalEntries.has(key)) canonicalEntries.set(key, entry);
   });
@@ -1783,7 +1893,7 @@ function buildHGBSOnlyRows() {
       return {
         id: `hgbs-only-${key}`,
         _source: 'hgbs',
-        _comparison: 'csv_missing',
+        _comparison: 'excel_missing',
         _historyEntry: entry,
         _status: 'already_sent',
         _result: { apiId: entry.apiId || '' },
@@ -1799,13 +1909,14 @@ function buildHGBSOnlyRows() {
           ? (raw.arrivalTimeEta || raw.arrivalTime || '-')
           : (raw.departureTimeEta || raw.departureTime || '-'),
         hgsbAircraftType: raw.airCraftTypeCode || raw.aircraftTypeCode || raw.aircraftType || '-',
-        reg: entry.reg || extractReg(raw) || '-'
+        reg: entry.reg || extractReg(raw) || '-',
+        harekatci: '-'
       };
     });
 }
 
 function getComparisonItems() {
-  const csvItems = STATE.rows.map((row, sourceIndex) => {
+  const excelItems = STATE.rows.map((row, sourceIndex) => {
     const entry = findHGBSEntryForRow(row);
 
     if (!STATE.filtersReady) row._comparison = 'pending';
@@ -1821,7 +1932,7 @@ function getComparisonItems() {
     readonly: true
   }));
 
-  return [...csvItems, ...hgbsItems];
+  return [...excelItems, ...hgbsItems];
 }
 
 function getRowProcessCategory(row) {
@@ -1844,9 +1955,9 @@ function getRowProcessCategory(row) {
 
 function matchesComparisonFilter(row, value) {
   if (value === 'ALL') return true;
-  if (value === 'PROBLEM') return ['hgbs_missing', 'csv_missing', 'error'].includes(row._comparison);
+  if (value === 'PROBLEM') return ['hgbs_missing', 'excel_missing', 'error'].includes(row._comparison);
   if (value === 'HGBS_MISSING') return row._comparison === 'hgbs_missing';
-  if (value === 'CSV_MISSING') return row._comparison === 'csv_missing';
+  if (value === 'EXCEL_MISSING') return row._comparison === 'excel_missing';
   if (value === 'ERROR') return row._comparison === 'error';
   if (value === 'MATCHED') return row._comparison === 'matched';
   return true;
@@ -1857,7 +1968,7 @@ function matchesSearch(row, query) {
   const haystack = [
     row.type, row.ac, getRowFlightDate(row), row.flightNo,
     row.departureAirport, row.arrivalAirport, row.time,
-    row.hgsbAircraftType, row.reg, row._status, row._error,
+    row.hgsbAircraftType, row.reg, row.harekatci, row._status, row._error,
     row._result?.apiId, getHGBSStatusLabel(row), getRowProcessCategory(row)
   ].join(' ').toLocaleLowerCase('tr-TR');
   return haystack.includes(query);
@@ -1882,7 +1993,7 @@ function updateFilterSummary(allItems, visibleItems) {
   el.innerHTML = `
     <strong>${visibleItems.length}</strong> / ${allItems.length} uçuş
     <span>HGBS'de eksik: <b>${count('hgbs_missing')}</b></span>
-    <span>CSV'de eksik: <b>${count('csv_missing')}</b></span>
+    <span>Excel'de eksik: <b>${count('excel_missing')}</b></span>
     <span>Hatalı: <b>${count('error')}</b></span>
   `;
 }
@@ -1935,7 +2046,7 @@ function renderTable() {
   visibleItems.forEach(item => tbody.appendChild(buildRow(item.row, item.sourceIndex, item.readonly)));
 
   if (!visibleItems.length) {
-    tbody.innerHTML = '<tr class="filter-empty-row"><td colspan="11">Seçili filtrelere uyan uçuş bulunamadı.</td></tr>';
+    tbody.innerHTML = '<tr class="filter-empty-row"><td colspan="12">Seçili filtrelere uyan uçuş bulunamadı.</td></tr>';
   }
 
   updateFilterSummary(allItems, visibleItems);
@@ -1944,7 +2055,7 @@ function renderTable() {
 function buildRow(row, index, readonly = false) {
   const tr = document.createElement('tr');
   tr.id = readonly ? `row-${row.id}` : `row-${index}`;
-  tr.className = `${row.type === 'GELİŞ' ? 'row-arrival' : 'row-departure'}${readonly ? ' row-csv-missing' : ''}`;
+  tr.className = `${row.type === 'GELİŞ' ? 'row-arrival' : 'row-departure'}${readonly ? ' row-excel-missing' : ''}`;
 
   const isArr = row.type === 'GELİŞ';
   const dateCell = readonly
@@ -1977,6 +2088,7 @@ function buildRow(row, index, readonly = false) {
     <td>${escapeHtml(row.time)}</td>
     <td>${escapeHtml(row.hgsbAircraftType)}</td>
     <td>${regCell}</td>
+    <td>${escapeHtml(row.harekatci || '—')}</td>
     <td${readonly ? '' : ` id="status-${index}"`}>${renderStatus(row, index)}</td>
     <td class="action-cell"${readonly ? '' : ` id="action-${index}"`}>${renderAction(row, index)}</td>
   `;
@@ -1985,8 +2097,8 @@ function buildRow(row, index, readonly = false) {
 }
 
 function renderStatus(row, index) {
-  if (row._comparison === 'csv_missing') {
-    return `<span class="status-badge status-csv-missing">🟣 CSV'de Eksik · ${escapeHtml(getHGBSStatusLabel(row))}</span>`;
+  if (row._comparison === 'excel_missing') {
+    return `<span class="status-badge status-excel-missing">🟣 Excel'de Eksik · ${escapeHtml(getHGBSStatusLabel(row))}</span>`;
   }
 
   switch (row._status) {
@@ -2010,8 +2122,8 @@ function renderStatus(row, index) {
 }
 
 function renderAction(row, index) {
-  if (row._comparison === 'csv_missing') {
-    return '<span class="comparison-note">HGBS kaydı · CSV satırı yok</span>';
+  if (row._comparison === 'excel_missing') {
+    return '<span class="comparison-note">HGBS kaydı · Excel satırı yok</span>';
   }
 
   const isArr = row.type === 'GELİŞ';
@@ -2099,7 +2211,7 @@ function openModal(index, force) {
 
 function setModalEtaDefaults(row) {
   const today = getRowFlightDate(row);
-  const time  = normalizeCsvTimeForInput(row.time);
+  const time  = normalizeScheduleTimeForInput(row.time);
   const m3 = subtractHoursFromDateTime(today, time, 3);
   const p3 = subtractHoursFromDateTime(today, time, -3);
 
@@ -2248,12 +2360,13 @@ function buildModalSummary(row, crewNum, captainName, nat, eta) {
     ['Tarih',         toHgbDate(getRowFlightDate(row))],
     ['Uçuş No',       row.flightNo],
     ['Güzergah',      `${row.departureAirport}→${row.arrivalAirport}`],
-    ['CSV Saat',      row.time],
+    ['Excel Saat',    row.time],
     [isArr ? 'Geliş ETA' : 'Gidiş ETA', `${etaDate||'—'} ${etaTime||''}`],
     ['Gerçek Varış',  `${eta.actualArrDate||'—'} ${eta.actualArrTime||''}`],
     ['Gerçek Kalkış', `${eta.actualDepDate||'—'} ${eta.actualDepTime||''}`],
     ['Uçak Tipi',     row.hgsbAircraftType],
     ['REG',           row.reg],
+    ['Harekatçı',     row.harekatci || '—'],
     ['Milliyet',      nat],
     ['Crew',          crewNum],
     ['Kaptan',        captainName || '—'],
@@ -2675,7 +2788,7 @@ function hgsbDateToInput(dateVal, dateStr) {
 }
 
 function hgsbTimeToInput(timeVal) {
-  return normalizeCsvTimeForInput(timeVal || '');
+  return normalizeScheduleTimeForInput(timeVal || '');
 }
 
 function openFlightEditModal() {
@@ -3772,11 +3885,11 @@ dropZone.addEventListener('drop', e => {
   dropZone.classList.remove('drag-over');
   const file = e.dataTransfer.files[0];
   if (!file) return;
-  if (!file.name.toLowerCase().endsWith('.csv')) {
-    showGlobalAlert('Lütfen .csv uzantılı bir dosya yükleyin.', 'error');
+  if (!isExcelFile(file)) {
+    showGlobalAlert('Lütfen .xlsx veya .xls uzantılı bir Excel dosyası yükleyin.', 'error');
     return;
   }
-  processCsvFile(file);
+  processExcelFile(file);
 });
 
 // ─────────────────────────────────────────────

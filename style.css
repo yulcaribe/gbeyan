@@ -181,7 +181,7 @@
     .toolbar input[type="number"] { width: 70px; }
     .toolbar input:focus { border-color: #3b82f6; }
 
-    #csvBtn {
+    #excelBtn {
       background: #1a365d;
       color: #fff;
       padding: 7px 14px;
@@ -192,8 +192,8 @@
       border: none;
       transition: background .2s;
     }
-    #csvBtn:hover { background: #2a4a7f; }
-    #csvBtn:disabled { opacity: .55; cursor: wait; }
+    #excelBtn:hover { background: #2a4a7f; }
+    #excelBtn:disabled { opacity: .55; cursor: wait; }
 
     .toolbar-sep { width: 1px; height: 28px; background: #e2e8f0; margin: 0 4px; }
 
@@ -401,7 +401,7 @@
 
     .row-arrival  { background: #f0fdf4; }
     .row-departure{ background: #eff6ff; }
-    .row-csv-missing { box-shadow: inset 4px 0 0 #8b5cf6; }
+    .row-excel-missing { box-shadow: inset 4px 0 0 #8b5cf6; }
 
     tbody tr:hover { filter: brightness(.97); }
 
@@ -462,7 +462,7 @@
     .status-error     { color: #dc2626; }
     .status-cancelled { color: #6b7280; }
     .status-hgbs-missing { color: #c2410c; }
-    .status-csv-missing { color: #6d28d9; }
+    .status-excel-missing { color: #6d28d9; }
 
     .comparison-note {
       display: inline-flex;
