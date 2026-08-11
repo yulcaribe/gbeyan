@@ -1,4 +1,5 @@
 /*
+ * Version: v1.3.1beta
  * NOZ / Norwegian compact GENDEC parser.
  * Sıkışık tablo formatını ekip satırlarına ayırır.
  */

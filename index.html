@@ -5,8 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HGBS</title>
-  <meta name="app-version" content="20260809-1">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css">
+  <meta name="app-version" content="v1.3.1beta">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/style.css?v=v1.3.1beta">
 </head>
 <body>
 
@@ -15,6 +15,7 @@
   <div class="login-card">
     <h1>TGS HGSB Gönderim</h1>
     <p>Devam etmek için sisteme giriş yapın.</p>
+    <span class="app-version-badge">v1.3.1beta</span>
 
     <div id="loginAlert"></div>
 
@@ -54,6 +55,7 @@
       </div>
     </div>
     <div class="topbar-right">
+      <span class="app-version-badge">v1.3.1beta</span>
       <button id="logoutBtn" onclick="logout()">Çıkış Yap</button>
     </div>
   </div>
@@ -365,7 +367,7 @@
  
  
 <!-- ══════════════════════ PDF READER MIN CDN JS ══════════════════════ -->
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/datas/countries.js?v=20260811-1"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/datas/countries.js?v=v1.3.1beta"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <!-- ══════════════════════ MAIN SCRIPTS ══════════════════════ -->
@@ -377,6 +379,7 @@
 //  Constants
 // ─────────────────────────────────────────────
 const MOCK_MODE    = false;   // ← test MOD
+const APP_VERSION  = 'v1.3.1beta';
 const BASE_URL     = 'https://hgbsapi.ticaret.gov.tr';
 const KEY_TOKEN    = 'tgs_bearer';
 const KEY_USER     = 'tgs_user';
@@ -3931,15 +3934,15 @@ init();
 
 <script> pdfjsLib.GlobalWorkerOptions.workerSrc =  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; </script>
 
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/fhy.js?v=20260811-1"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/fhy.js?v=v1.3.1beta"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>	
 
 <!-- CREWDEC GENDEC SCRIPT -->
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/noz.js?v=20260622-5"></script>
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/rys.js?v=20260622-5"></script>
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/sxs.js?v=20260622-5"></script>
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/gendec-core.js?v=20260811-1"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/noz.js?v=v1.3.1beta"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/rys.js?v=v1.3.1beta"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/sxs.js?v=v1.3.1beta"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/gendec-core.js?v=v1.3.1beta"></script>
 
 </body>
 </html>
