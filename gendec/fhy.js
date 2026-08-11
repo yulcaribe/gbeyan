@@ -655,13 +655,22 @@
   }
 
   function normalizeNationality(value) {
+    const countryData = globalThis.HGBS_COUNTRY_DATA;
+    const datasetCode = countryData?.findCode(value) || '';
+    if (datasetCode) return datasetCode;
+
     const folded = foldChars(value)
       .replace(/[^A-Za-z]/g, '')
       .toUpperCase();
 
     if (!folded) return '';
-    if (NATIONALITY_MAP[folded]) return NATIONALITY_MAP[folded];
-    if (/^[A-Z]{2}$/.test(folded)) return folded;
+    if (NATIONALITY_MAP[folded]) {
+      const mappedCode = NATIONALITY_MAP[folded];
+      return countryData ? (countryData.get(mappedCode) ? mappedCode : '') : mappedCode;
+    }
+    if (/^[A-Z]{2}$/.test(folded)) {
+      return countryData ? (countryData.get(folded) ? folded : '') : folded;
+    }
     return '';
   }
 

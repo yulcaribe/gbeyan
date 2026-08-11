@@ -1242,6 +1242,10 @@ function normalizeNationality(v) {
   const raw = String(v || '').trim();
   if (!raw) return '';
 
+  const countryData = globalThis.HGBS_COUNTRY_DATA;
+  const datasetCode = countryData?.findCode(raw) || '';
+  if (datasetCode) return datasetCode;
+
   const folded = foldTurkishChars(raw)
     .replace(/[^A-Za-z]/g, '')
     .toUpperCase();
@@ -1253,14 +1257,14 @@ function normalizeNationality(v) {
   }
 
   if (/^[A-Z]{2}$/.test(folded)) {
-    return folded;
+    return countryData ? (countryData.get(folded) ? folded : '') : folded;
   }
 
   if (/^[A-Z]{3}$/.test(folded)) {
-    return folded.slice(0, 3);
+    return countryData ? '' : folded.slice(0, 3);
   }
 
-  return folded.slice(0, 3);
+  return '';
 }
 
 function normalizePersonName(v) {
@@ -1355,7 +1359,9 @@ function buildCrewPreviewCard(crew, i) {
 
         <div class="crew-field">
           <label>Milliyet</label>
-          <input value="${escapeHtml(crew.nationalityCode || '')}" maxlength="3" oninput="crewUpdateRow(${i}, 'nationalityCode', this.value)">
+          <select onchange="crewUpdateRow(${i}, 'nationalityCode', this.value)">
+            ${buildCountryOptions(crew.nationalityCode)}
+          </select>
         </div>
 
         <div class="crew-field">
@@ -1388,6 +1394,29 @@ function buildCrewTypeOptions(selected) {
     const sel = value === selected ? 'selected' : '';
     return `<option value="${escapeHtml(value)}" ${sel}>${escapeHtml(value + ' - ' + label)}</option>`;
   }).join('');
+}
+
+function buildCountryOptions(selected) {
+  const selectedCode = normalizeNationality(selected);
+  const countries = globalThis.HGBS_COUNTRIES || [];
+
+  if (!countries.length) {
+    return `<option value="${escapeHtml(selectedCode)}" selected>${escapeHtml(selectedCode || 'Ülke verisi yüklenemedi')}</option>`;
+  }
+
+  return [
+    '<option value="">Milliyet seçin</option>',
+    ...countries.map(country => {
+      const code = String(country.value || '').toUpperCase();
+      const isSelected = code === selectedCode ? ' selected' : '';
+      return `<option value="${escapeHtml(code)}"${isSelected}>${escapeHtml(code + ' - ' + country.label)}</option>`;
+    })
+  ].join('');
+}
+
+function formatCountryValue(value) {
+  const code = normalizeNationality(value);
+  return globalThis.HGBS_COUNTRY_DATA?.format(code) || code || String(value || '').trim();
 }
 
 function crewUpdateRow(index, key, value) {
@@ -1537,6 +1566,7 @@ function buildExistingCrewCard(item, i) {
   const name = item.name || '';
   const surname = item.surname || '';
   const nationality = item.nationalityCode || item.nationalityText || '';
+  const nationalityDisplay = formatCountryValue(nationality);
 
   return `
     <div class="crew-card">
@@ -1567,7 +1597,7 @@ function buildExistingCrewCard(item, i) {
 
         <div class="crew-field">
           <label>Milliyet</label>
-          <input value="${escapeHtml(nationality)}" disabled>
+          <input value="${escapeHtml(nationalityDisplay)}" disabled>
         </div>
 
         <div class="crew-actions">
@@ -1714,4 +1744,3 @@ async function submitCrewBeyan() {
     }
   }
 }
-

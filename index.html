@@ -365,6 +365,7 @@
  
  
 <!-- ══════════════════════ PDF READER MIN CDN JS ══════════════════════ -->
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/datas/countries.js?v=20260811-1"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <!-- ══════════════════════ MAIN SCRIPTS ══════════════════════ -->
@@ -395,11 +396,11 @@ const FLIGHT_EXCEL_COLUMNS = Object.freeze({
   handler: 17           // R - HRK / Harekatçı
 });
 
-const NATIONALITY_PREFIX_MAP = {
+const AIRCRAFT_REGISTRATION_COUNTRY_MAP = Object.freeze({
   'TC':'TR','RA':'RU','LZ':'BG','ER':'MD','YR':'RO',
   'SP':'PL','LY':'LT','9H':'MT','SE':'SE','OM':'SK',
   'LN':'NO','CF':'CA'
-};
+});
 
 // ─────────────────────────────────────────────
 //  State
@@ -476,10 +477,22 @@ function normalizeStationCode(value, fallback = 'AYT') {
   return code || fallback;
 }
 
+function getCountryRecord(countryCode) {
+  const code = String(countryCode || '').trim().toUpperCase();
+  return window.HGBS_COUNTRY_DATA?.get(code) || window.HGBS_COUNTRY_BY_CODE?.[code] || null;
+}
+
+function formatCountry(countryCode) {
+  const code = String(countryCode || '').trim().toUpperCase();
+  if (!code) return '—';
+  return window.HGBS_COUNTRY_DATA?.format(code) || code;
+}
+
 function getNationalityCode(tailNumber) {
   const reg = String(tailNumber ?? '').trim().toUpperCase().replace(/\s+/g,'').replace(/-/g,'');
   if (!reg || reg === '-') return 'TR';
-  return NATIONALITY_PREFIX_MAP[reg.substring(0, 2)] ?? 'TR';
+  const countryCode = AIRCRAFT_REGISTRATION_COUNTRY_MAP[reg.substring(0, 2)] ?? 'TR';
+  return getCountryRecord(countryCode)?.value || countryCode;
 }
 
 function normalizeScheduleTimeForInput(timeValue) {
@@ -2367,7 +2380,7 @@ function buildModalSummary(row, crewNum, captainName, nat, eta) {
     ['Uçak Tipi',     row.hgsbAircraftType],
     ['REG',           row.reg],
     ['Harekatçı',     row.harekatci || '—'],
-    ['Milliyet',      nat],
+    ['Milliyet',      formatCountry(nat)],
     ['Crew',          crewNum],
     ['Kaptan',        captainName || '—'],
     ['Mükellef',      STATE.user.taxFirmName],
@@ -2719,7 +2732,7 @@ function buildFlightDetailHtml(d) {
     ['Uçak Tipi',        d.airCraftTypeText],
     ['Gümrük',           d.customText],
     ['Şirket',           d.companyInfo],
-    ['Milliyet',         d.nationalityText],
+    ['Milliyet',         d.nationalityText || formatCountry(d.nationalityCode)],
     ['Kalkış',          `${d.departurePortText} (${d.departurePortCode})`],
     ['Varış',           `${d.arrivalPortText} (${d.arrivalPortCode})`],
     ['Kuyruk / REG',     d.tailNumber],
@@ -3280,6 +3293,7 @@ function buildHvbCrewReadonlyHtml(list, errorMessage) {
     const surname = getCrewField(item, ['surname', 'lastName', 'familyName']);
     const fullName = [name, surname].filter(Boolean).join(' ') || getCrewField(item, ['nameSurname', 'fullName', 'crewName']);
     const nationality = getCrewField(item, ['nationalityCode', 'nationalityText', 'nationality']);
+    const nationalityDisplay = getCountryRecord(nationality) ? formatCountry(nationality) : nationality;
     const identityCode = getCrewField(item, ['identityCode', 'documentTypeCode', 'documentType']);
     const identityNumber = getCrewField(item, ['identityNumber', 'passportNumber', 'documentNumber']);
 
@@ -3290,7 +3304,7 @@ function buildHvbCrewReadonlyHtml(list, errorMessage) {
           <span style="font-size:12px;color:#64748b">${escapeHtml(typeCode + (typeText ? ' - ' + typeText : ''))}</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;color:#475569">
-          <div><strong>Milliyet:</strong> ${escapeHtml(nationality || '—')}</div>
+          <div><strong>Milliyet:</strong> ${escapeHtml(nationalityDisplay || '—')}</div>
           <div><strong>Belge:</strong> ${escapeHtml([identityCode, identityNumber].filter(Boolean).join(' / ') || '—')}</div>
         </div>
       </div>`;
@@ -3917,7 +3931,7 @@ init();
 
 <script> pdfjsLib.GlobalWorkerOptions.workerSrc =  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; </script>
 
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/fhy.js?v=20260622-5"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/fhy.js?v=20260811-1"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>	
 
@@ -3925,7 +3939,7 @@ init();
 <script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/noz.js?v=20260622-5"></script>
 <script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/rys.js?v=20260622-5"></script>
 <script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/sxs.js?v=20260622-5"></script>
-<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/gendec-core.js?v=20260622-5"></script>
+<script src="https://cdn.jsdelivr.net/gh/yulcaribe/gbeyan@main/gendec/gendec-core.js?v=20260811-1"></script>
 
 </body>
 </html>

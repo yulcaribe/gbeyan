@@ -376,10 +376,15 @@
       font-weight: 600;
     }
 
-    .table-responsive { overflow-x: auto; }
+    .table-responsive {
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
 
     table {
       width: 100%;
+      min-width: 1120px;
       border-collapse: collapse;
       font-size: 13px;
     }
@@ -394,6 +399,14 @@
       text-transform: uppercase;
       letter-spacing: .5px;
       white-space: nowrap;
+    }
+
+    thead th:last-child {
+      position: sticky;
+      right: 0;
+      z-index: 5;
+      background: #1a365d;
+      box-shadow: -8px 0 12px -10px rgba(15, 23, 42, .85);
     }
 
     tbody tr { border-bottom: 1px solid #f1f5f9; }
@@ -559,7 +572,16 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .action-cell { display: flex; align-items: center; gap: 6px; }
+    .action-cell {
+      position: sticky;
+      right: 0;
+      z-index: 3;
+      min-width: 116px;
+      background: inherit;
+      box-shadow: -8px 0 12px -10px rgba(15, 23, 42, .45);
+    }
+
+    .action-cell > * + * { margin-left: 6px; }
 
     .send-btn {
       padding: 4px 10px;
