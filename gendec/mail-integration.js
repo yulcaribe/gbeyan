@@ -9,8 +9,15 @@
   const MAIL_API = 'https://mailer.mehmetisaacar47.workers.dev';
   const CAPTAIN_PREF_KEY = 'beyan_captain_from_gendec';
   const FLIGHT_CACHE_TTL_MS = 5 * 60 * 1000;
+  const MAIL_CACHE_TTL_MS = 15 * 60 * 1000;
+  const MAIL_MISS_REFRESH_MS = 60 * 1000;
+  const PDF_CACHE_TTL_MS = 15 * 60 * 1000;
+  const PDF_CACHE_LIMIT = 8;
   const session = { username: '', password: '', connected: false };
   const flightDetailCache = new Map();
+  const mailMessageCache = { username: '', messages: [], loadedAt: 0, pending: null, pendingUsername: '' };
+  const mailPdfCache = new Map();
+  let mailCacheGeneration = 0;
   let afterConnect = null;
 
   function getCaptainDefault() {
@@ -48,28 +55,63 @@
     return data.error || `Mail servisi HTTP ${response.status}`;
   }
 
-  function isMissingEndpoint(response, message) {
-    return response.status === 404 && /^not found\.?$/i.test(String(message || '').trim());
+  function clearMailCache() {
+    mailCacheGeneration++;
+    mailMessageCache.username = '';
+    mailMessageCache.messages = [];
+    mailMessageCache.loadedAt = 0;
+    mailMessageCache.pending = null;
+    mailMessageCache.pendingUsername = '';
+    mailPdfCache.clear();
   }
 
-  async function verifyMailConnection(headers) {
-    let response = await fetch(`${MAIL_API}/api/login`, {
+  async function loadMailMessages({
+    username = session.username,
+    password = session.password,
+    force = false
+  } = {}) {
+    const alias = String(username || '').trim().replace(/^tgs\\/i, '');
+    if (!alias || !password) throw new Error('Mail oturumu açık değil.');
+
+    const cacheIsFresh =
+      !force &&
+      mailMessageCache.username === alias &&
+      mailMessageCache.loadedAt > 0 &&
+      Date.now() - mailMessageCache.loadedAt < MAIL_CACHE_TTL_MS;
+    if (cacheIsFresh) return mailMessageCache.messages;
+
+    if (mailMessageCache.pending && mailMessageCache.pendingUsername === alias) {
+      return mailMessageCache.pending;
+    }
+
+    const generation = mailCacheGeneration;
+    const pending = (async () => {
+      const response = await fetch(`${MAIL_API}/api/messages`, {
       method: 'GET',
       cache: 'no-store',
-      headers
-    });
-    if (response.ok) return;
+        headers: mailHeaders(alias, password)
+      });
+      if (!response.ok) throw new Error(await readError(response));
+      const data = await response.json();
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (generation === mailCacheGeneration) {
+        mailMessageCache.username = alias;
+        mailMessageCache.messages = messages;
+        mailMessageCache.loadedAt = Date.now();
+      }
+      return messages;
+    })();
 
-    const message = await readError(response);
-    if (!isMissingEndpoint(response, message)) throw new Error(message);
-
-    // Eski Worker surumlerinde /api/login yoktu; mail listesi istegi ayni dogrulamayi yapar.
-    response = await fetch(`${MAIL_API}/api/messages`, {
-      method: 'GET',
-      cache: 'no-store',
-      headers
-    });
-    if (!response.ok) throw new Error(await readError(response));
+    mailMessageCache.pending = pending;
+    mailMessageCache.pendingUsername = alias;
+    try {
+      return await pending;
+    } finally {
+      if (mailMessageCache.pending === pending) {
+        mailMessageCache.pending = null;
+        mailMessageCache.pendingUsername = '';
+      }
+    }
   }
 
   function ensureMailStyles() {
@@ -269,6 +311,7 @@
     session.username = '';
     session.password = '';
     session.connected = false;
+    clearMailCache();
     updateMailUi();
   }
 
@@ -289,15 +332,16 @@
 
     button.disabled = true;
     button.textContent = 'Bağlanıyor...';
-    setLoginStatus('SXS\\GenDec klasörü kontrol ediliyor...');
+    setLoginStatus('SXS\\GenDec mailleri oturum önbelleğine alınıyor...');
     try {
-      await verifyMailConnection(mailHeaders(username, password));
+      clearMailCache();
+      const messages = await loadMailMessages({ username, password, force: true });
 
       session.username = username;
       session.password = password;
       session.connected = true;
       updateMailUi();
-      setLoginStatus('Mail bağlantısı kuruldu.', 'success');
+      setLoginStatus(`Mail bağlantısı kuruldu. ${messages.length} mail önbelleğe alındı.`, 'success');
 
       const callback = afterConnect;
       afterConnect = null;
@@ -501,15 +545,33 @@
     return candidates[0] || null;
   }
 
-  async function fetchFlightPdfLegacy(flightNo, flightDate) {
-    const messagesResponse = await fetch(`${MAIL_API}/api/messages`, {
-      method: 'GET',
-      cache: 'no-store',
-      headers: mailHeaders()
-    });
-    if (!messagesResponse.ok) throw new Error(await readError(messagesResponse));
-    const data = await messagesResponse.json();
-    const match = findMailPdf(data.messages, flightNo, flightDate);
+  function pdfCacheKey(flightNo, flightDate) {
+    return `${session.username}|${flightDate}|${mailSearchKey(flightNo)}`;
+  }
+
+  function putPdfCache(key, value) {
+    mailPdfCache.delete(key);
+    mailPdfCache.set(key, { ...value, cachedAt: Date.now() });
+    while (mailPdfCache.size > PDF_CACHE_LIMIT) {
+      mailPdfCache.delete(mailPdfCache.keys().next().value);
+    }
+  }
+
+  async function fetchFlightPdfCached(flightNo, flightDate) {
+    const key = pdfCacheKey(flightNo, flightDate);
+    const cachedPdf = mailPdfCache.get(key);
+    if (cachedPdf && Date.now() - cachedPdf.cachedAt < PDF_CACHE_TTL_MS) {
+      return { ...cachedPdf, fromCache: true };
+    }
+    if (cachedPdf) mailPdfCache.delete(key);
+
+    let messages = await loadMailMessages();
+    let match = findMailPdf(messages, flightNo, flightDate);
+    const cacheAge = Date.now() - mailMessageCache.loadedAt;
+    if (!match && cacheAge >= MAIL_MISS_REFRESH_MS) {
+      messages = await loadMailMessages({ force: true });
+      match = findMailPdf(messages, flightNo, flightDate);
+    }
     if (!match) throw new Error(`${flightDate} tarihli ${flightNo} uçuşu için PDF eki bulunamadı.`);
 
     const query = new URLSearchParams({ id: match.attachment.id, name: match.attachment.name });
@@ -519,7 +581,13 @@
       headers: mailHeaders()
     });
     if (!attachmentResponse.ok) throw new Error(await readError(attachmentResponse));
-    return { response: attachmentResponse, subject: String(match.message.subject || ''), name: match.attachment.name };
+    const result = {
+      blob: await attachmentResponse.blob(),
+      subject: String(match.message.subject || ''),
+      name: match.attachment.name
+    };
+    putPdfCache(key, result);
+    return { ...result, fromCache: false };
   }
 
   async function fetchCrewPdfFromMail() {
@@ -536,26 +604,13 @@
         button.textContent = 'Mail aranıyor...';
       }
       if (typeof setCrewStatus === 'function') {
-        setCrewStatus('info', `${flightDate} / ${flightNo} için SXS\\GenDec mailleri aranıyor...`);
+        setCrewStatus('info', `${flightDate} / ${flightNo} için oturum önbelleği aranıyor...`);
       }
 
-      const query = new URLSearchParams({ flightNo, date: flightDate });
-      let response = await fetch(`${MAIL_API}/api/flight-pdf?${query}`, {
-        method: 'GET',
-        cache: 'no-store',
-        headers: mailHeaders()
-      });
-      let legacyResult = null;
-      if (!response.ok) {
-        const message = await readError(response);
-        if (!isMissingEndpoint(response, message)) throw new Error(message);
-        legacyResult = await fetchFlightPdfLegacy(flightNo, flightDate);
-        response = legacyResult.response;
-      }
-
-      const blob = await response.blob();
-      const fileName = legacyResult?.name || decodeHeader(response.headers.get('X-Attachment-Name'), `GenDec_${flightDate}_${flightNo}.pdf`);
-      const mailSubject = legacyResult?.subject || decodeHeader(response.headers.get('X-Mail-Subject'), '');
+      const result = await fetchFlightPdfCached(flightNo, flightDate);
+      const blob = result.blob;
+      const fileName = result.name || `GenDec_${flightDate}_${flightNo}.pdf`;
+      const mailSubject = result.subject;
       const file = new File([blob], fileName, { type: blob.type || 'application/pdf', lastModified: Date.now() });
 
       if (typeof handleCrewPdfSelect !== 'function') throw new Error('Mevcut PDF parser fonksiyonu bulunamadı.');
@@ -563,7 +618,8 @@
       let count = 0;
       try { count = Array.isArray(_crewParsedList) ? _crewParsedList.length : 0; } catch (_) {}
       if (mailSubject && count > 0 && typeof setCrewStatus === 'function') {
-        setCrewStatus('success', `${count} ekip mail PDF'sinden okundu. Kaynak: ${mailSubject}`);
+        const cacheNote = result.fromCache ? ' (PDF önbellekten)' : '';
+        setCrewStatus('success', `${count} ekip mail PDF'sinden okundu${cacheNote}. Kaynak: ${mailSubject}`);
       }
     } catch (error) {
       if (typeof setCrewStatus === 'function') setCrewStatus('error', `Mailden ekip çekilemedi: ${error.message}`);
@@ -673,7 +729,13 @@
     fetchCrewPdf: fetchCrewPdfFromMail,
     isConnected: () => session.connected,
     captainDefault: () => getCaptainDefault(),
-    clearFlightCache: () => flightDetailCache.clear()
+    clearFlightCache: () => flightDetailCache.clear(),
+    refreshMailCache: () => loadMailMessages({ force: true }),
+    mailCacheInfo: () => ({
+      messages: mailMessageCache.messages.length,
+      loadedAt: mailMessageCache.loadedAt,
+      pdfs: mailPdfCache.size
+    })
   };
 
   ensureMailUi();
