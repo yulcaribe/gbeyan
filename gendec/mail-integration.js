@@ -17,6 +17,9 @@
   const flightDetailCache = new Map();
   const mailMessageCache = { username: '', messages: [], loadedAt: 0, pending: null, pendingUsername: '' };
   const mailPdfCache = new Map();
+  const mailPdfPending = new Map();
+  const mailCrewCache = new Map();
+  const mailCrewPending = new Map();
   let mailCacheGeneration = 0;
   let afterConnect = null;
 
@@ -63,6 +66,18 @@
     mailMessageCache.pending = null;
     mailMessageCache.pendingUsername = '';
     mailPdfCache.clear();
+    mailPdfPending.clear();
+    mailCrewCache.clear();
+    mailCrewPending.clear();
+  }
+
+  async function verifyMailConnection(username, password) {
+    const response = await fetch(`${MAIL_API}/api/login`, {
+      method: 'GET',
+      cache: 'no-store',
+      headers: mailHeaders(username, password)
+    });
+    if (!response.ok) throw new Error(await readError(response));
   }
 
   async function loadMailMessages({
@@ -332,16 +347,21 @@
 
     button.disabled = true;
     button.textContent = 'Bağlanıyor...';
-    setLoginStatus('SXS\\GenDec mailleri oturum önbelleğine alınıyor...');
+    setLoginStatus('Mail bağlantısı kontrol ediliyor...');
     try {
       clearMailCache();
-      const messages = await loadMailMessages({ username, password, force: true });
+      await verifyMailConnection(username, password);
 
       session.username = username;
       session.password = password;
       session.connected = true;
       updateMailUi();
-      setLoginStatus(`Mail bağlantısı kuruldu. ${messages.length} mail önbelleğe alındı.`, 'success');
+      setLoginStatus('Mail bağlantısı kuruldu.', 'success');
+
+      // Ağır klasör senkronizasyonu giriş penceresini bekletmeden arka planda başlar.
+      loadMailMessages().catch(() => {
+        // Kullanıcı Mailden Ekip Çek dediğinde normal akış tekrar dener ve hatayı gösterir.
+      });
 
       const callback = afterConnect;
       afterConnect = null;
@@ -557,6 +577,18 @@
     }
   }
 
+  function cloneCrewList(crews) {
+    return (crews || []).map(crew => ({ ...crew }));
+  }
+
+  function putCrewCache(key, value) {
+    mailCrewCache.delete(key);
+    mailCrewCache.set(key, { ...value, crews: cloneCrewList(value.crews), cachedAt: Date.now() });
+    while (mailCrewCache.size > PDF_CACHE_LIMIT) {
+      mailCrewCache.delete(mailCrewCache.keys().next().value);
+    }
+  }
+
   async function fetchFlightPdfCached(flightNo, flightDate) {
     const key = pdfCacheKey(flightNo, flightDate);
     const cachedPdf = mailPdfCache.get(key);
@@ -565,29 +597,102 @@
     }
     if (cachedPdf) mailPdfCache.delete(key);
 
-    let messages = await loadMailMessages();
-    let match = findMailPdf(messages, flightNo, flightDate);
-    const cacheAge = Date.now() - mailMessageCache.loadedAt;
-    if (!match && cacheAge >= MAIL_MISS_REFRESH_MS) {
-      messages = await loadMailMessages({ force: true });
-      match = findMailPdf(messages, flightNo, flightDate);
-    }
-    if (!match) throw new Error(`${flightDate} tarihli ${flightNo} uçuşu için PDF eki bulunamadı.`);
+    const existingRequest = mailPdfPending.get(key);
+    if (existingRequest) return existingRequest;
 
-    const query = new URLSearchParams({ id: match.attachment.id, name: match.attachment.name });
-    const attachmentResponse = await fetch(`${MAIL_API}/api/attachment?${query}`, {
-      method: 'GET',
-      cache: 'no-store',
-      headers: mailHeaders()
+    const generation = mailCacheGeneration;
+    const pending = (async () => {
+      let messages = await loadMailMessages();
+      let match = findMailPdf(messages, flightNo, flightDate);
+      const cacheAge = Date.now() - mailMessageCache.loadedAt;
+      if (!match && cacheAge >= MAIL_MISS_REFRESH_MS) {
+        messages = await loadMailMessages({ force: true });
+        match = findMailPdf(messages, flightNo, flightDate);
+      }
+      if (!match) throw new Error(`${flightDate} tarihli ${flightNo} uçuşu için PDF eki bulunamadı.`);
+
+      const query = new URLSearchParams({ id: match.attachment.id, name: match.attachment.name });
+      const attachmentResponse = await fetch(`${MAIL_API}/api/attachment?${query}`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: mailHeaders()
+      });
+      if (!attachmentResponse.ok) throw new Error(await readError(attachmentResponse));
+      const result = {
+        blob: await attachmentResponse.blob(),
+        subject: String(match.message.subject || ''),
+        name: match.attachment.name
+      };
+      if (generation === mailCacheGeneration) putPdfCache(key, result);
+      return { ...result, fromCache: false };
+    })();
+
+    mailPdfPending.set(key, pending);
+    try {
+      return await pending;
+    } finally {
+      if (mailPdfPending.get(key) === pending) mailPdfPending.delete(key);
+    }
+  }
+
+  async function prepareFlightCrew(flightNo, flightDate) {
+    const key = pdfCacheKey(flightNo, flightDate);
+    const cachedCrew = mailCrewCache.get(key);
+    if (cachedCrew && Date.now() - cachedCrew.cachedAt < PDF_CACHE_TTL_MS) {
+      return { ...cachedCrew, crews: cloneCrewList(cachedCrew.crews), fromCache: true };
+    }
+    if (cachedCrew) mailCrewCache.delete(key);
+
+    const existingRequest = mailCrewPending.get(key);
+    if (existingRequest) return existingRequest;
+
+    const generation = mailCacheGeneration;
+    const parserContext = typeof getFhyParserContext === 'function'
+      ? { ...getFhyParserContext() }
+      : { flightNo };
+    const pending = (async () => {
+      const pdf = await fetchFlightPdfCached(flightNo, flightDate);
+      const file = new File([pdf.blob], pdf.name || `GenDec_${flightDate}_${flightNo}.pdf`, {
+        type: pdf.blob.type || 'application/pdf',
+        lastModified: Date.now()
+      });
+      if (typeof parseCrewPdfFileData !== 'function') {
+        throw new Error('GenDec PDF parser fonksiyonu bulunamadı.');
+      }
+      const parsed = await parseCrewPdfFileData(file, parserContext);
+      if (!Array.isArray(parsed.crews) || !parsed.crews.length) {
+        throw new Error('PDF içinden ekip listesi bulunamadı. Gendec formatı farklı olabilir.');
+      }
+      const result = {
+        file,
+        crews: cloneCrewList(parsed.crews),
+        subject: pdf.subject,
+        name: pdf.name,
+        fhyPageNo: parsed.fhyResult?.matched ? parsed.fhyResult.pageNo : null
+      };
+      if (generation === mailCacheGeneration) putCrewCache(key, result);
+      return { ...result, crews: cloneCrewList(result.crews), fromCache: false };
+    })();
+
+    mailCrewPending.set(key, pending);
+    try {
+      return await pending;
+    } finally {
+      if (mailCrewPending.get(key) === pending) mailCrewPending.delete(key);
+    }
+  }
+
+  function prefetchOpenFlightCrew() {
+    if (!session.connected) return;
+    let query;
+    try {
+      query = getOpenFlightQuery();
+    } catch (_) {
+      return;
+    }
+    prepareFlightCrew(query.flightNo, query.flightDate).catch(() => {
+      // Sessiz ön hazırlık: kullanıcı isterse butona bastığında hata normal akışta gösterilir.
     });
-    if (!attachmentResponse.ok) throw new Error(await readError(attachmentResponse));
-    const result = {
-      blob: await attachmentResponse.blob(),
-      subject: String(match.message.subject || ''),
-      name: match.attachment.name
-    };
-    putPdfCache(key, result);
-    return { ...result, fromCache: false };
   }
 
   async function fetchCrewPdfFromMail() {
@@ -607,19 +712,17 @@
         setCrewStatus('info', `${flightDate} / ${flightNo} için oturum önbelleği aranıyor...`);
       }
 
-      const result = await fetchFlightPdfCached(flightNo, flightDate);
-      const blob = result.blob;
-      const fileName = result.name || `GenDec_${flightDate}_${flightNo}.pdf`;
-      const mailSubject = result.subject;
-      const file = new File([blob], fileName, { type: blob.type || 'application/pdf', lastModified: Date.now() });
-
-      if (typeof handleCrewPdfSelect !== 'function') throw new Error('Mevcut PDF parser fonksiyonu bulunamadı.');
-      await handleCrewPdfSelect({ target: { files: [file] } });
-      let count = 0;
-      try { count = Array.isArray(_crewParsedList) ? _crewParsedList.length : 0; } catch (_) {}
-      if (mailSubject && count > 0 && typeof setCrewStatus === 'function') {
-        const cacheNote = result.fromCache ? ' (PDF önbellekten)' : '';
-        setCrewStatus('success', `${count} ekip mail PDF'sinden okundu${cacheNote}. Kaynak: ${mailSubject}`);
+      const result = await prepareFlightCrew(flightNo, flightDate);
+      _crewPdfFile = result.file;
+      _crewParsedList = cloneCrewList(result.crews);
+      if (typeof renderCrewPreview !== 'function') throw new Error('Ekip önizleme fonksiyonu bulunamadı.');
+      renderCrewPreview();
+      const submitButton = document.getElementById('crewSubmitBtn');
+      if (submitButton) submitButton.disabled = false;
+      if (typeof setCrewStatus === 'function') {
+        const source = result.subject ? ` Kaynak: ${result.subject}` : '';
+        const fhyNote = result.fhyPageNo ? ` FHY sayfa ${result.fhyPageNo}.` : '';
+        setCrewStatus('success', `${result.crews.length} ekip hazır listeden getirildi.${fhyNote}${source}`);
       }
     } catch (error) {
       if (typeof setCrewStatus === 'function') setCrewStatus('error', `Mailden ekip çekilemedi: ${error.message}`);
@@ -663,6 +766,7 @@
       const wrappedOpenCrew = function (...args) {
         const result = originalOpenCrew.apply(this, args);
         injectCrewMailControls();
+        setTimeout(prefetchOpenFlightCrew, 0);
         return result;
       };
       wrappedOpenCrew.__mailWrapped = true;
@@ -734,7 +838,9 @@
     mailCacheInfo: () => ({
       messages: mailMessageCache.messages.length,
       loadedAt: mailMessageCache.loadedAt,
-      pdfs: mailPdfCache.size
+      pdfs: mailPdfCache.size,
+      parsedCrews: mailCrewCache.size,
+      preparing: mailPdfPending.size + mailCrewPending.size
     })
   };
 

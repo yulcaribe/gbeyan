@@ -480,7 +480,7 @@ function ensureFhyParserLoaded() {
 
   _fhyParserLoadPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `${FHY_PARSER_CDN_URL}?runtime=${Date.now()}`;
+    script.src = `${FHY_PARSER_CDN_URL}&runtime=${Date.now()}`;
     script.async = true;
     script.dataset.fhyParser = 'dynamic';
 
@@ -515,6 +515,46 @@ function isLikelyFreebirdPdfText(text) {
   );
 }
 
+async function parseCrewPdfFileData(file, parserContext = getFhyParserContext()) {
+  if (!file || !String(file.name || '').toLowerCase().endsWith('.pdf')) {
+    throw new Error('Lütfen Gendec PDF dosyası seç.');
+  }
+
+  let fhyResult = { matched: false, crews: [], warnings: [] };
+  let fhyParserError = null;
+
+  try {
+    const fhyParser = await ensureFhyParserLoaded();
+    fhyResult = await fhyParser.parsePdfFile(file, parserContext);
+    console.info('[FHYParser] parse result', fhyResult);
+  } catch (fhyErr) {
+    fhyParserError = fhyErr;
+    console.warn('[FHYParser] unavailable/error:', fhyErr);
+  }
+
+  let crews = [];
+  let pdfText = '';
+  let isFreebirdPdf = !!(fhyResult.detected || fhyResult.freebirdPageCount > 0);
+
+  if (!isFreebirdPdf && (!fhyResult.matched || fhyParserError)) {
+    pdfText = await readPdfText(file);
+    isFreebirdPdf = isLikelyFreebirdPdfText(pdfText);
+
+    if (isFreebirdPdf) {
+      console.info('[FHYParser] Freebird PDF detected from PDF content; generic parser skipped.');
+    }
+  }
+
+  if (fhyResult.matched && Array.isArray(fhyResult.crews) && fhyResult.crews.length) {
+    crews = fhyResult.crews;
+  } else if (!isFreebirdPdf) {
+    if (!pdfText) pdfText = await readPdfText(file);
+    crews = parseGendecCrewText(pdfText);
+  }
+
+  return { crews, fhyResult, fhyParserError, isFreebirdPdf };
+}
+
 async function handleCrewPdfSelect(event) {
   const file = event.target.files[0];
 
@@ -536,37 +576,7 @@ async function handleCrewPdfSelect(event) {
   setCrewStatus('info', 'PDF okunuyor...');
 
   try {
-    let fhyResult = { matched: false, crews: [], warnings: [] };
-    let fhyParserError = null;
-
-    try {
-      const fhyParser = await ensureFhyParserLoaded();
-      fhyResult = await fhyParser.parsePdfFile(file, getFhyParserContext());
-      console.info('[FHYParser] parse result', fhyResult);
-    } catch (fhyErr) {
-      fhyParserError = fhyErr;
-      console.warn('[FHYParser] unavailable/error:', fhyErr);
-    }
-
-    let crews = [];
-    let pdfText = '';
-    let isFreebirdPdf = !!(fhyResult.detected || fhyResult.freebirdPageCount > 0);
-
-    if (!isFreebirdPdf && (!fhyResult.matched || fhyParserError)) {
-      pdfText = await readPdfText(file);
-      isFreebirdPdf = isLikelyFreebirdPdfText(pdfText);
-
-      if (isFreebirdPdf) {
-        console.info('[FHYParser] Freebird PDF detected from PDF content; generic parser skipped.');
-      }
-    }
-
-    if (fhyResult.matched && Array.isArray(fhyResult.crews) && fhyResult.crews.length) {
-      crews = fhyResult.crews;
-    } else if (!isFreebirdPdf) {
-      if (!pdfText) pdfText = await readPdfText(file);
-      crews = parseGendecCrewText(pdfText);
-    }
+    const { crews, fhyResult, fhyParserError, isFreebirdPdf } = await parseCrewPdfFileData(file);
 
     if (!crews.length) {
       const fhyErrorNote = isFreebirdPdf
