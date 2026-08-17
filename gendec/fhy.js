@@ -1,4 +1,4 @@
-/* G Beyan FHY parser | version: v1.5.4b */
+/* G Beyan FHY parser | version: v1.5.5b */
 /* global pdfjsLib */
 (function (global) {
   'use strict';

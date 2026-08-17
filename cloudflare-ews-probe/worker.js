@@ -1,6 +1,6 @@
 /*
  * TGS Exchange ActiveSync -> browser JSON API
- * Version: v1.5.4b
+ * Version: v1.5.5b
  * Username and password arrive from the browser for each request.
  * They are not stored by the Worker. Add Cloudflare Access / a real login before public use.
  */
@@ -376,7 +376,7 @@ export default {
       if (url.pathname === '/' || url.pathname === '/index.html') {
         return new Response(CLIENT_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
-      if (url.pathname === '/api/health') return json({ ok: true, version: 'v1.5.4b', protocol: 'Exchange ActiveSync 14.1', login: `${DOMAIN}\\kullanici`, folder: TARGET_FOLDER_PATH.join('\\') });
+      if (url.pathname === '/api/health') return json({ ok: true, version: 'v1.5.5b', protocol: 'Exchange ActiveSync 14.1', login: `${DOMAIN}\\kullanici`, folder: TARGET_FOLDER_PATH.join('\\') });
       const alias = userAlias(enteredUser);
       if (!password) return json({ error: 'Mail parolasini gir.' }, 401);
       if (url.pathname === '/api/login') {
