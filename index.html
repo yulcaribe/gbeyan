@@ -199,6 +199,15 @@
           <label for="modalCaptainName">Kaptan <small>(Opsiyonel)</small></label>
           <input type="text" id="modalCaptainName" placeholder="Örn: ATAKAN DAYAN" oninput="updateModalPreview()">
         </div>
+        <div class="modal-field">
+          <label>Seferin Yurtdışı Devamı Var mı?</label>
+          <div class="yes-no-toggle" role="group" aria-label="Seferin yurtdışı devamı">
+            <button type="button" id="modalPlaneContinueYes" aria-pressed="false"
+              onclick="setModalPlaneContinueAbroad(true)">Evet</button>
+            <button type="button" id="modalPlaneContinueNo" class="active" aria-pressed="true"
+              onclick="setModalPlaneContinueAbroad(false)">Hayır</button>
+          </div>
+        </div>
         <div class="modal-field modal-arr-eta">
           <label for="modalArrEtaDate">Geliş ETA Tarihi</label>
           <input type="date" id="modalArrEtaDate" oninput="syncModalArrDerived();updateModalPreview()">
@@ -429,6 +438,8 @@ let _modalArrManual  = false;
 let _modalDepManual  = false;
 let _pendingEtaValues   = null;
 let _pendingCaptainName = '';
+let _modalPlaneContinueAbroad = false;
+let _pendingPlaneContinueAbroad = false;
 
 // ─────────────────────────────────────────────
 //  Helpers
@@ -1805,7 +1816,7 @@ function normalizeHandlerText(value) {
 // ─────────────────────────────────────────────
 //  Payload builder
 // ─────────────────────────────────────────────
-function buildPayload(row, crewNum, captainName, etaValues) {
+function buildPayload(row, crewNum, captainName, etaValues, isPlaneContinueAbroad = false) {
   const nationalityCode = getNationalityCode(row.reg);
   const base = {
     flightNumber:          row.flightNo,
@@ -1820,7 +1831,7 @@ function buildPayload(row, crewNum, captainName, etaValues) {
     customCode:            '070200',
     varisCikisBildirimNo:  '',
     isAutoConfirmVBCB:     false,
-    isPlaneContinueAbroad: false,
+    isPlaneContinueAbroad: !!isPlaneContinueAbroad,
     id:                    ''
   };
 
@@ -2239,6 +2250,7 @@ function openModal(index, force) {
   _modalForce = force;
   _modalArrManual = false;
   _modalDepManual = false;
+  _modalPlaneContinueAbroad = false;
 
   document.getElementById('modalCrewInput').value = STATE.crewNumber;
   document.getElementById('modalCaptainName').value = '';
@@ -2248,6 +2260,7 @@ function openModal(index, force) {
 
   setModalEtaDefaults(row);
   setModalFieldVisibility(row);
+  setModalPlaneContinueAbroad(false);
   setModalStatus('', '');
   document.getElementById('payloadWrap').style.display = 'none';
   document.getElementById('payloadToggleIcon').textContent = '▶';
@@ -2374,6 +2387,21 @@ function onModalCrewInput(val) {
   updateModalPreview();
 }
 
+function setModalPlaneContinueAbroad(value) {
+  _modalPlaneContinueAbroad = !!value;
+  const yesBtn = document.getElementById('modalPlaneContinueYes');
+  const noBtn  = document.getElementById('modalPlaneContinueNo');
+
+  if (yesBtn && noBtn) {
+    yesBtn.classList.toggle('active', _modalPlaneContinueAbroad);
+    noBtn.classList.toggle('active', !_modalPlaneContinueAbroad);
+    yesBtn.setAttribute('aria-pressed', String(_modalPlaneContinueAbroad));
+    noBtn.setAttribute('aria-pressed', String(!_modalPlaneContinueAbroad));
+  }
+
+  if (_modalPendingIndex !== null) updateModalPreview();
+}
+
 function updateModalPreview() {
   const row = STATE.rows[_modalPendingIndex];
   if (!row) return;
@@ -2384,7 +2412,7 @@ function updateModalPreview() {
   const nat         = getNationalityCode(row.reg);
 
   document.getElementById('modalSummary').innerHTML =
-    buildModalSummary(row, Number.isNaN(crewNum) ? '—' : crewNum, captainName, nat, eta);
+    buildModalSummary(row, Number.isNaN(crewNum) ? '—' : crewNum, captainName, nat, eta, _modalPlaneContinueAbroad);
 
   const pre = document.getElementById('modalPayloadPre');
   if (Number.isNaN(crewNum) || crewNum < 0) {
@@ -2397,13 +2425,13 @@ function updateModalPreview() {
     return;
   }
   try {
-    pre.textContent = JSON.stringify(buildPayload(row, crewNum, captainName, eta), null, 2);
+    pre.textContent = JSON.stringify(buildPayload(row, crewNum, captainName, eta, _modalPlaneContinueAbroad), null, 2);
   } catch (e) {
     pre.textContent = 'Hata: ' + e.message;
   }
 }
 
-function buildModalSummary(row, crewNum, captainName, nat, eta) {
+function buildModalSummary(row, crewNum, captainName, nat, eta, isPlaneContinueAbroad) {
   const isArr   = row.type === 'GELİŞ';
   const etaDate = isArr ? eta.arrivalDateEta    : eta.departureDateEta;
   const etaTime = isArr ? eta.arrivalTimeEta    : eta.departureTimeEta;
@@ -2422,6 +2450,7 @@ function buildModalSummary(row, crewNum, captainName, nat, eta) {
     ['Milliyet',      formatCountry(nat)],
     ['Crew',          crewNum],
     ['Kaptan',        captainName || '—'],
+    ['Yurtdışı Devamı', isPlaneContinueAbroad ? 'Evet' : 'Hayır'],
     ['Mükellef',      STATE.user.taxFirmName],
     ['Yetkili',       STATE.user.userName]
   ];
@@ -2472,6 +2501,7 @@ function confirmAndSend() {
   STATE.crewNumber    = crewNum;
   _pendingEtaValues   = eta;
   _pendingCaptainName = captainName;
+  _pendingPlaneContinueAbroad = _modalPlaneContinueAbroad;
 
   const btn = document.getElementById('modalConfirmBtn');
   if (btn) {
@@ -2511,7 +2541,7 @@ async function sendFlight(index, force = false) {
     const eta     = _pendingEtaValues   ?? buildDefaultEtaValues(row);
     const captain = _pendingCaptainName ?? '';
     const crew    = STATE.crewNumber;
-    const payload = buildPayload(row, crew, captain, eta);
+    const payload = buildPayload(row, crew, captain, eta, _pendingPlaneContinueAbroad);
 
     let apiId;
     if (MOCK_MODE) {
