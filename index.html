@@ -350,6 +350,28 @@
   </div>
 </div>
 
+<!-- ══════════════════════ MODAL — Kargo Manifestosu ══════════════════════ -->
+<div class="modal-overlay hidden" id="cargoManifestOverlay">
+  <div class="modal-card modal-card-wide">
+    <div class="modal-header">
+      <div>
+        <h2>Kargo Manifestosu</h2>
+        <div id="cargoManifestSubtitle" class="modal-hdr-sub"></div>
+      </div>
+      <button class="modal-close" type="button" onclick="CargoManifest.close()">✕</button>
+    </div>
+    <div class="modal-body" id="cargoManifestBody">
+      <!-- Kargo formu cargo/cargo-core.js tarafından oluşturulur. -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" type="button" onclick="CargoManifest.close()">Kapat</button>
+      <button class="btn btn-primary" type="button" id="cargoManifestSaveBtn" onclick="CargoManifest.save()">
+        Manifestoyu Kaydet
+      </button>
+    </div>
+  </div>
+</div>
+
 
 <!-- ══════════════════════ MODAL — Uçuş İptal ══════════════════════ -->
 <div class="modal-overlay hidden" id="cancelOverlay">
@@ -2839,6 +2861,12 @@ function buildFlightDetailHtml(d) {
             onclick="openCrewBeyanModal()">
             👥 Ekip Beyan Formu
           </button>
+
+		  <button class="btn btn-outline" style="width:100%;justify-content:center;color:#9a3412;border-color:#9a3412;background:#fff7ed"
+			onclick="CargoManifest.open()">
+			📦 Kargo Manifestosu
+		  </button>
+
 		  <button class="btn btn-outline" style="width:100%;justify-content:center"
 			onclick="openFlightEditModal()">
 			✏️ Uçuşu Düzenle
@@ -3205,8 +3233,8 @@ async function submitFlightEdit() {
 // ── Hava Yolu Beyan — state ──────────────────────────────────────
 let _hvbState = {};
 
-function hvbInitState() {
-  _hvbState = {
+function hvbDefaultState() {
+  return {
     isFlightContinue:          false,
     isFlightChangeInternalLine:false,
     isDivert:                  false,
@@ -3234,6 +3262,10 @@ function hvbInitState() {
     cargoUnloadThisPortKgm:   0,
     cargoUnloadOtherPortKgm:  0,
   };
+}
+
+function hvbInitState() {
+  _hvbState = hvbDefaultState();
 }
 
 function hvbSetToggle(key, val) {
@@ -3385,20 +3417,6 @@ function buildHvbCrewReadonlyHtml(list, errorMessage) {
   `);
 }
 
-function CARGO_GET_ENDPOINT(baseId) {
-  return `/api/Flight/GetCargos?baseId=${encodeURIComponent(baseId)}&api-version=1.0`;
-}
-
-function normalizeApiCargoList(res) {
-  if (!res) return [];
-  if (Array.isArray(res)) return res;
-  if (Array.isArray(res.data)) return res.data;
-  if (res.data && Array.isArray(res.data.cargos)) return res.data.cargos;
-  if (res.data && Array.isArray(res.data.items)) return res.data.items;
-  if (Array.isArray(res.cargos)) return res.cargos;
-  return [];
-}
-
 function hvbStateHasCargo() {
   if (_hvbState.hasCargo) return true;
   return [
@@ -3407,17 +3425,25 @@ function hvbStateHasCargo() {
   ].some(key => hvbParseDecimal(_hvbState[key]) > 0);
 }
 
-function buildHvbCargoManifestReadonlyHtml(list, errorMessage) {
+function buildHvbCargoManifestReadonlyHtml(list, errorMessage, airDecCargoKnown = true) {
   if (errorMessage) {
     return hvbReadonlySection('Kargo Manifestosu', `
       <div class="alert alert-warning" style="margin:0">
         Kargo manifestosu sorgulanamadı: ${escapeHtml(errorMessage)}
+        Bu uyarı beyan işlemine devam etmeni engellemez.
       </div>
     `);
   }
 
   if (!Array.isArray(list) || !list.length) {
+    const emptyWarning = airDecCargoKnown && _hvbState.hasCargo
+      ? `<div class="alert alert-warning" style="margin:0 0 8px">
+           Hava Yolu Beyanında <strong>Kargo Var: Evet</strong>, ancak kayıtlı manifest bulunamadı.
+           Bu uyarı beyan işlemine devam etmeni engellemez; manifesti daha sonra girebilirsin.
+         </div>`
+      : '';
     return hvbReadonlySection('Kargo Manifestosu', `
+      ${emptyWarning}
       ${hvbReadonlyRow('Kayıtlı Kargo Sayısı', 0)}
       <div style="font-size:13px;color:#64748b;padding-top:8px">Bu uçuş için sistemde kayıtlı kargo manifestosu bulunamadı.</div>
     `);
@@ -3462,13 +3488,25 @@ function buildHvbCargoManifestReadonlyHtml(list, errorMessage) {
       </div>`;
   }).join('');
 
+  const declarationWarning = airDecCargoKnown && !_hvbState.hasCargo
+    ? `<div class="alert alert-warning" style="margin:0 0 8px">
+         Manifestte ${list.length} kargo kaydı var, fakat Hava Yolu Beyanında <strong>Kargo Var: Hayır</strong> görünüyor.
+         Bu yalnızca bir uyarıdır; beyanı veya manifesti daha sonra güncelleyebilirsin.
+       </div>`
+    : !airDecCargoKnown
+      ? `<div class="alert alert-warning" style="margin:0 0 8px">
+           Hava Yolu Beyanındaki kargo seçimi okunamadı. Manifest kayıtları yine de aşağıda gösteriliyor.
+         </div>`
+      : '';
+
   return hvbReadonlySection('Kargo Manifestosu', `
+    ${declarationWarning}
     ${hvbReadonlyRow('Kayıtlı Kargo Sayısı', list.length)}
     ${hvbReadonlyRow('Toplam Kap / KG', `${totalPieces} / ${hvbFormatDecimal(totalKgm)}`)}
     ${cards}
   `);
 }
-function buildHvbReadonlyHtml(d, row, crewList = [], crewError = '', cargoList = [], cargoError = '') {
+function buildHvbReadonlyHtml(d, row, crewList = [], crewError = '', cargoList = [], cargoError = '', airDecCargoKnown = true) {
   const isDeparture = d.flightTypeCode === 'GDS';
   const statusLine = [d.statusCode, d.statusText].filter(Boolean).join(' — ') || getHGBSStatusLabel(row);
 
@@ -3499,7 +3537,9 @@ function buildHvbReadonlyHtml(d, row, crewList = [], crewError = '', cargoList =
 
     ${buildHvbCrewReadonlyHtml(crewList, crewError)}
 
-    ${hvbStateHasCargo() ? buildHvbCargoManifestReadonlyHtml(cargoList, cargoError) : ''}
+    ${(hvbStateHasCargo() || cargoList.length || cargoError)
+      ? buildHvbCargoManifestReadonlyHtml(cargoList, cargoError, airDecCargoKnown)
+      : ''}
 
     ${hvbReadonlySection('Hava Yolu Beyan Formu', `
       ${hvbReadonlyRow('Seferin İç Hat Devamı Var Mı?', hvbYesNo(_hvbState.isFlightContinue))}
@@ -3569,9 +3609,13 @@ async function openDeclareHavayoluBeyanModal(index) {
 
     _currentFlightDetail = detail;
 
+    let airDecCargoKnown = false;
     try {
       const airDecRes = await apiCall('GET', `/api/Flight/GetAirDec?baseId=${encodeURIComponent(apiId)}&api-version=1.0`);
-      if (airDecRes && airDecRes.data) hvbPopulateFromApi(airDecRes.data);
+      if (airDecRes && airDecRes.data) {
+        hvbPopulateFromApi(airDecRes.data);
+        airDecCargoKnown = true;
+      }
     } catch (_) {
       // Hava yolu beyan kaydı yoksa default değerlerle bilgi ekranı gösterilir.
     }
@@ -3589,17 +3633,25 @@ async function openDeclareHavayoluBeyanModal(index) {
 
     let cargoList = [];
     let cargoError = '';
-    if (hvbStateHasCargo()) {
-      try {
-        const cargoRes = await apiCall('GET', CARGO_GET_ENDPOINT(apiId));
-        cargoList = normalizeApiCargoList(cargoRes);
-      } catch (cargoErr) {
-        cargoError = cargoErr.message || String(cargoErr);
+    try {
+      if (!globalThis.CargoManifest?.getCargos) {
+        throw new Error('Kargo modülü yüklenemedi.');
       }
+      cargoList = await globalThis.CargoManifest.getCargos(apiId);
+    } catch (cargoErr) {
+      cargoError = cargoErr.message || String(cargoErr);
     }
 
     document.getElementById('hvbModalSubtitle').textContent = [detail.tailNumber, detail.departurePortCode, detail.arrivalPortCode].filter(Boolean).join(' · ');
-    document.getElementById('hvbModalBody').innerHTML = buildHvbReadonlyHtml(detail, row, crewList, crewError, cargoList, cargoError);
+    document.getElementById('hvbModalBody').innerHTML = buildHvbReadonlyHtml(
+      detail,
+      row,
+      crewList,
+      crewError,
+      cargoList,
+      cargoError,
+      airDecCargoKnown
+    );
 
     if (btn) btn.disabled = false;
 
@@ -3675,7 +3727,7 @@ async function openHavayoluBeyanModal() {
   document.getElementById('hvbModalBody').innerHTML = buildHvbFormHtml(d);
 }
 
-function hvbPopulateFromApi(data) {
+function hvbPopulateStateFromApi(target, data) {
   const boolKeys = [
     'isFlightContinue','isFlightChangeInternalLine','isDivert','isEmergencyLand',
     'hasCargo','hasDutyFree','hasUndecCargo','hasCatering','hasOutOfCatering','hasPassenger',
@@ -3690,11 +3742,16 @@ function hvbPopulateFromApi(data) {
   const decimalKeys = [
     'cargoLoadThisPortKgm','cargoUnloadThisPortKgm','cargoUnloadOtherPortKgm',
   ];
-  boolKeys.forEach(k => { if (data[k] !== undefined) _hvbState[k] = !!data[k]; });
-  intKeys.forEach(k  => { if (data[k] !== undefined) _hvbState[k] = parseInt(data[k], 10) || 0; });
-  decimalKeys.forEach(k => { if (data[k] !== undefined) _hvbState[k] = hvbParseDecimal(data[k]); });
-  if (data.nextAirPortCode !== undefined) _hvbState.nextAirPortCode = String(data.nextAirPortCode || '').toUpperCase().replace(/\s+/g, '');
-  if (data.otherIssues !== undefined) _hvbState.otherIssues = data.otherIssues || 'NILL';
+  boolKeys.forEach(k => { if (data[k] !== undefined) target[k] = !!data[k]; });
+  intKeys.forEach(k  => { if (data[k] !== undefined) target[k] = parseInt(data[k], 10) || 0; });
+  decimalKeys.forEach(k => { if (data[k] !== undefined) target[k] = hvbParseDecimal(data[k]); });
+  if (data.nextAirPortCode !== undefined) target.nextAirPortCode = String(data.nextAirPortCode || '').toUpperCase().replace(/\s+/g, '');
+  if (data.otherIssues !== undefined) target.otherIssues = data.otherIssues || 'NILL';
+  return target;
+}
+
+function hvbPopulateFromApi(data) {
+  hvbPopulateStateFromApi(_hvbState, data);
 }
 
 function closeHavayoluBeyanModal() {
@@ -3824,9 +3881,101 @@ function buildHvbFormHtml(d) {
   </div>`;
 }
 
-async function submitHavayoluBeyan() {
-  const d      = _currentFlightDetail || {};
+function buildHvbPayload(d, baseId, sourceState = _hvbState, existingData = {}) {
+  const source = sourceState || hvbDefaultState();
   const isDep  = d.flightTypeCode === 'GDS';
+  const nextAirPortCode = source.isFlightContinue
+    ? String(source.nextAirPortCode || '').trim().toUpperCase().replace(/\s+/g, '')
+    : '';
+
+  return {
+    // Kullanıcı girdileri
+    isFlightContinue:          source.isFlightContinue,
+    isFlightChangeInternalLine:source.isFlightChangeInternalLine,
+    isDivert:                  source.isDivert,
+    isEmergencyLand:           source.isEmergencyLand,
+    hasCargo:                  source.hasCargo,
+    hasDutyFree:               source.hasDutyFree,
+    hasUndecCargo:             source.hasUndecCargo,
+    hasCatering:               source.hasCatering,
+    hasOutOfCatering:          source.hasOutOfCatering,
+    hasPassenger:              source.hasPassenger,
+    // Geliş: bu limana çıkarılacak | Gidiş: bu limandan alınan
+    passengerUnloadThisPort:      (!isDep && source.hasPassenger) ? source.passengerUnloadThisPort     : null,
+    passengerBabyUnloadThisPort:  (!isDep && source.hasPassenger) ? source.passengerBabyUnloadThisPort : null,
+    passengerLoadThisPort:        (isDep  && source.hasPassenger) ? source.passengerLoadThisPort       : null,
+    passengerBabyLoadThisPort:    (isDep  && source.hasPassenger) ? source.passengerBabyLoadThisPort   : null,
+    passengerUnloadOtherPort:     source.hasPassenger ? source.passengerUnloadOtherPort     : null,
+    passengerBabyUnloadOtherPort: source.hasPassenger ? source.passengerBabyUnloadOtherPort : null,
+    fuelNational:  source.fuelNational,
+    fuelForeign:   source.fuelForeign,
+    otherIssues:   source.otherIssues || 'NILL',
+    // Kargo alt alanları — hasCargo false ise null
+    cargoUnloadThisPortUnit:  (source.hasCargo && !isDep) ? source.cargoUnloadThisPortUnit  : null,
+    cargoLoadThisPortUnit:    (source.hasCargo && isDep)  ? source.cargoLoadThisPortUnit    : null,
+    cargoUnloadOtherPortUnit: source.hasCargo             ? source.cargoUnloadOtherPortUnit : null,
+    cargoUnloadThisPortKgm:   (source.hasCargo && !isDep) ? source.cargoUnloadThisPortKgm   : null,
+    cargoLoadThisPortKgm:     (source.hasCargo && isDep)  ? source.cargoLoadThisPortKgm     : null,
+    cargoUnloadOtherPortKgm:  source.hasCargo             ? source.cargoUnloadOtherPortKgm  : null,
+    // Statik / uçuştan türetilen alanlar
+    afterDecCatering:   existingData.afterDecCatering ?? false,
+    afterDecFuel:       existingData.afterDecFuel ?? false,
+    nextAirPortCode,
+    nextDepartureDate:  existingData.nextDepartureDate ?? null,
+    nextDepartureTime:  existingData.nextDepartureTime ?? '',
+    preAirPortCode:     existingData.preAirPortCode ?? null,
+    flightTypeCode:     d.flightTypeCode || '',
+    id:                 existingData.id || '',
+    baseId:             baseId || '',
+    seals:              Array.isArray(existingData.seals) ? existingData.seals : [],
+  };
+}
+
+async function updateAirDecCargoFromManifest(baseId, flightDetail, cargos, knownAirDecData = null) {
+  const d = flightDetail || {};
+  let existingData = knownAirDecData && typeof knownAirDecData === 'object'
+    ? knownAirDecData
+    : null;
+
+  if (!existingData) {
+    try {
+      const response = await apiCall('GET', `/api/Flight/GetAirDec?baseId=${encodeURIComponent(baseId)}&api-version=1.0`);
+      existingData = response?.data || response || null;
+    } catch (error) {
+      const message = error.message || String(error);
+      if (/\b404\b|bulunamad[ıi]|not found/i.test(message)) {
+        existingData = null;
+      } else {
+        throw new Error(`Mevcut Hava Yolu Beyanı okunamadı: ${message}`);
+      }
+    }
+  }
+
+  const cargoList = Array.isArray(cargos) ? cargos : [];
+  const hasCargo = cargoList.length > 0;
+  const totalPieces = cargoList.reduce((sum, cargo) => sum + (parseInt(cargo?.numOfPsc, 10) || 0), 0);
+  const totalKgm = cargoList.reduce((sum, cargo) => sum + hvbParseDecimal(cargo?.grossKgm), 0);
+  const isDeparture = d.flightTypeCode === 'GDS';
+  const nextState = hvbPopulateStateFromApi(hvbDefaultState(), existingData || {});
+
+  nextState.hasCargo = hasCargo;
+  nextState.cargoLoadThisPortUnit = hasCargo && isDeparture ? totalPieces : 0;
+  nextState.cargoLoadThisPortKgm = hasCargo && isDeparture ? totalKgm : 0;
+  nextState.cargoUnloadThisPortUnit = hasCargo && !isDeparture ? totalPieces : 0;
+  nextState.cargoUnloadThisPortKgm = hasCargo && !isDeparture ? totalKgm : 0;
+  nextState.cargoUnloadOtherPortUnit = 0;
+  nextState.cargoUnloadOtherPortKgm = 0;
+
+  const payload = buildHvbPayload(d, baseId, nextState, existingData || {});
+  const response = await apiCall('PUT', '/api/Flight/SetAirDec?api-version=1.0', payload);
+  const responseData = response?.data && typeof response.data === 'object' && !Array.isArray(response.data)
+    ? response.data
+    : {};
+  return { response, data: { ...payload, ...responseData } };
+}
+
+async function submitHavayoluBeyan() {
+  const d = _currentFlightDetail || {};
   const nextAirPortCode = _hvbState.isFlightContinue
     ? String(_hvbState.nextAirPortCode || '').trim().toUpperCase().replace(/\s+/g, '')
     : '';
@@ -3836,47 +3985,7 @@ async function submitHavayoluBeyan() {
     return;
   }
 
-  const payload = {
-    // Kullanıcı girdileri
-    isFlightContinue:          _hvbState.isFlightContinue,
-    isFlightChangeInternalLine:_hvbState.isFlightChangeInternalLine,
-    isDivert:                  _hvbState.isDivert,
-    isEmergencyLand:           _hvbState.isEmergencyLand,
-    hasCargo:                  _hvbState.hasCargo,
-    hasDutyFree:               _hvbState.hasDutyFree,
-    hasUndecCargo:             _hvbState.hasUndecCargo,
-    hasCatering:               _hvbState.hasCatering,
-    hasOutOfCatering:          _hvbState.hasOutOfCatering,
-    hasPassenger:              _hvbState.hasPassenger,
-    // Geliş: bu limana çıkarılacak | Gidiş: bu limandan alınan
-    passengerUnloadThisPort:      (!isDep && _hvbState.hasPassenger) ? _hvbState.passengerUnloadThisPort     : null,
-    passengerBabyUnloadThisPort:  (!isDep && _hvbState.hasPassenger) ? _hvbState.passengerBabyUnloadThisPort : null,
-    passengerLoadThisPort:        (isDep  && _hvbState.hasPassenger) ? _hvbState.passengerLoadThisPort       : null,
-    passengerBabyLoadThisPort:    (isDep  && _hvbState.hasPassenger) ? _hvbState.passengerBabyLoadThisPort   : null,
-    passengerUnloadOtherPort:     _hvbState.hasPassenger ? _hvbState.passengerUnloadOtherPort     : null,
-    passengerBabyUnloadOtherPort: _hvbState.hasPassenger ? _hvbState.passengerBabyUnloadOtherPort : null,
-    fuelNational:  _hvbState.fuelNational,
-    fuelForeign:   _hvbState.fuelForeign,
-    otherIssues:   _hvbState.otherIssues || 'NILL',
-    // Kargo alt alanları — hasCargo false ise null
-    cargoUnloadThisPortUnit:  (_hvbState.hasCargo && !isDep) ? _hvbState.cargoUnloadThisPortUnit  : null,
-    cargoLoadThisPortUnit:    (_hvbState.hasCargo && isDep)  ? _hvbState.cargoLoadThisPortUnit    : null,
-    cargoUnloadOtherPortUnit: _hvbState.hasCargo             ? _hvbState.cargoUnloadOtherPortUnit : null,
-    cargoUnloadThisPortKgm:   (_hvbState.hasCargo && !isDep) ? _hvbState.cargoUnloadThisPortKgm   : null,
-    cargoLoadThisPortKgm:     (_hvbState.hasCargo && isDep)  ? _hvbState.cargoLoadThisPortKgm     : null,
-    cargoUnloadOtherPortKgm:  _hvbState.hasCargo             ? _hvbState.cargoUnloadOtherPortKgm  : null,
-    // Statik / uçuştan türetilen alanlar
-    afterDecCatering:   false,
-    afterDecFuel:       false,
-    nextAirPortCode,
-    nextDepartureDate:  null,
-    nextDepartureTime:  '',
-    preAirPortCode:     null,
-    flightTypeCode:     d.flightTypeCode || '',
-    id:                 '',
-    baseId:             _currentFlightBaseId || '',
-    seals:              [],
-  };
+  const payload = buildHvbPayload(d, _currentFlightBaseId, _hvbState);
 
   const btn = document.querySelector('#havayoluBeyanOverlay .btn-primary');
   const origText = btn ? btn.textContent : '';
@@ -3926,7 +4035,17 @@ function onSearch(val) {
 //  Keyboard shortcuts
 // ─────────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeErrorModal(); closeResultModal(); closeCancelModal(); }
+  if (e.key === 'Escape') {
+    const cargoOverlay = document.getElementById('cargoManifestOverlay');
+    if (cargoOverlay && !cargoOverlay.classList.contains('hidden')) {
+      globalThis.CargoManifest?.close();
+      return;
+    }
+    closeModal();
+    closeErrorModal();
+    closeResultModal();
+    closeCancelModal();
+  }
   if (e.key === 'Enter' && document.getElementById('loginSection').style.display !== 'none') {
     doLogin();
   }
@@ -3995,6 +4114,9 @@ init();
 
 
 </script>
+
+<!-- CARGO MANIFEST SCRIPT -->
+<script src="cargo/cargo-core.js?v=v1.5.5b"></script>
 
 
 
