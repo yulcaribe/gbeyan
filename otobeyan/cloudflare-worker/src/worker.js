@@ -134,6 +134,26 @@ async function fillLogin(page, env) {
   await username.waitFor({ state: 'visible', timeout: 30_000 });
   await username.fill(env.IGO_USERNAME);
   await password.fill(env.IGO_PASSWORD);
+
+  // Live View'da kullanıcı adı açık metin görünmesin. Değer input içinde
+  // kaldığı için iGO form gönderimi değişmeden çalışır.
+  await page.addStyleTag({
+    content: `
+      input[name="eMailorUserName"],
+      #eMailorUserName_I,
+      input[id*="eMailorUserName"] {
+        -webkit-text-security: disc !important;
+        user-select: none !important;
+        caret-color: transparent !important;
+      }
+    `
+  });
+
+  await username.evaluate(element => {
+    element.setAttribute('autocomplete', 'off');
+    element.setAttribute('aria-label', 'iGO kullanıcı adı gizlendi');
+    element.readOnly = true;
+  });
 }
 
 async function createLiveView(context, page) {
