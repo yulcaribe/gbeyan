@@ -53,6 +53,27 @@ function isLoginUrl(value) {
   return /\/Account\/pgLogin\.aspx/i.test(String(value || ''));
 }
 
+async function gotoWithAbortRetry(page, url, options = {}) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+        ...options
+      });
+    } catch (error) {
+      lastError = error;
+      const aborted = /net::ERR_ABORTED/i.test(String(error?.message || error));
+      if (!aborted || attempt === 3) throw error;
+      await page.waitForTimeout(attempt * 1_000);
+    }
+  }
+
+  throw lastError;
+}
+
 function parseLoadSheet(text, url) {
   if (!/L\s*O\s*A\s*D\s*S\s*H\s*E\s*E\s*T/i.test(text)) {
     throw new Error('Load Sheet metni bulunamadı.');
@@ -129,7 +150,13 @@ async function waitForHumanLogin(page, timeoutMs = 480_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const url = page.url();
-    if (url.startsWith(IGO_ORIGIN) && !isLoginUrl(url) && url !== 'about:blank') return;
+    if (url.startsWith(IGO_ORIGIN) && !isLoginUrl(url) && url !== 'about:blank') {
+      // Login POST'u URL'yi değiştirdikten sonra /Default.aspx yüklenmeye devam
+      // edebilir. Yeni navigasyona başlamadan mevcut yönlendirmeyi bitir.
+      await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(1_000);
+      return;
+    }
     await page.waitForTimeout(1_000);
   }
   throw new Error('CAPTCHA/giriş için ayrılan 8 dakika doldu. Testi yeniden başlat.');
@@ -197,7 +224,7 @@ async function fetchLoadSheet(context, selected) {
   const url = `${IGO_ORIGIN}/WB/pgWBPrint.aspx?ID=${encodeURIComponent(selected.wbMainId)}&MODE=LS`;
   const page = await context.newPage();
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await gotoWithAbortRetry(page, url);
     if (isLoginUrl(page.url())) throw new Error('Load Sheet açılırken iGO oturumu sona erdi.');
     const text = await page.locator('#LSText').innerText({ timeout: 30_000 });
     return parseLoadSheet(text, url);
@@ -226,7 +253,7 @@ async function runTest(env, input, emit) {
     await waitForHumanLogin(page);
     emit({ type: 'progress', message: 'iGO girişi başarılı. Uçuş aranıyor…' });
 
-    await page.goto(FLIGHT_LIST_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await gotoWithAbortRetry(page, FLIGHT_LIST_URL);
     if (isLoginUrl(page.url())) throw new Error('iGO oturumu doğrulanamadı.');
 
     const rows = await searchGrid(page, flight, date);
