@@ -395,7 +395,14 @@ async function runIgoQuery(context) {
       try { liveViewWindow?.close?.(); } catch (_) {}
       window.focus();
     } catch (error) {
-      addMessage('Load Sheet bulunamadı veya okunamadı. Yolcu ve yakıtı elle girebilirsin.', 'error');
+      const detail = String(error?.message || '');
+      const temporaryServiceProblem = /servisi (şu an yoğun|günlük kullanım sınırına ulaştı)/i.test(detail);
+      addMessage(
+        temporaryServiceProblem
+          ? `${detail} Yolcu ve yakıtı bu sırada elle girebilirsin.`
+          : 'Load Sheet bulunamadı veya okunamadı. Yolcu ve yakıtı elle girebilirsin.',
+        'error'
+      );
     } finally {
       setBusy(false);
       checkIgoConnectivity();

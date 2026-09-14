@@ -7,7 +7,7 @@
   const integrity = Object.freeze({
     'config.js': 'sha384-akJuHZbBjrRjShEbd2OHpc6xgppwOxuAa6PEJKdAjJrCfry8z6hS+mh/plOwC4Zl',
     'client/api.js': 'sha384-aSWpmlohvKVw6u20FkkCXttI0KO+mDPobprXI//BlvWNoB8LhnlUTMxxHh6uLHzm',
-    'quickbeyan.js': 'sha384-tq8+aDTcd8CmdfrzPZ53uOdQ6LtQku84UQKG+Fy/xrrzrq1JDlch5Ey1tB9rFQoh'
+    'quickbeyan.js': 'sha384-jZP5pCoO0iPrTNXAF890jmDC9/Nb5QkNf+poyaOMvijt9HYo/LSpaGziZKHZf9o3'
   });
   let featureScriptPromise = null;
   let unlocked = false;

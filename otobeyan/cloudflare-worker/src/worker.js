@@ -18,6 +18,12 @@ const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
 const LOADSHEET_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const LOADSHEET_CACHE_RETENTION_MS = 36 * 60 * 60 * 1000;
+// Browser Rendering Free plan yeni tarayıcı açılışlarını yaklaşık 20 saniyede
+// bir ile sınırlar. Cron yenilemesiyle kullanıcı sorgusunun çakışmasını Durable
+// Object üzerinde tek bir kiralama kaydıyla engelliyoruz.
+const BROWSER_LAUNCH_COOLDOWN_MS = 22_000;
+const BROWSER_QUERY_WAIT_MS = 75_000;
+const BROWSER_LEASE_TTL_MS = 10 * 60 * 1000;
 const API_HEADERS = {
   'Access-Control-Allow-Origin': 'null',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
@@ -108,10 +114,111 @@ export class IgoSessionStore extends DurableObject {
       savedAt: record?.savedAt || null
     };
   }
+
+  async acquireBrowserLease(token, ttlMs = BROWSER_LEASE_TTL_MS) {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const now = Date.now();
+      const lease = await this.ctx.storage.get('browserLease');
+      if (lease?.token && lease.token !== token && Number(lease.expiresAt || 0) > now) {
+        return {
+          acquired: false,
+          reason: 'in-use',
+          retryAfterMs: Math.max(500, Number(lease.expiresAt) - now)
+        };
+      }
+
+      const lastLaunchAt = Number((await this.ctx.storage.get('browserLastLaunchAt')) || 0);
+      const cooldownRemaining = BROWSER_LAUNCH_COOLDOWN_MS - (now - lastLaunchAt);
+      if (cooldownRemaining > 0) {
+        return {
+          acquired: false,
+          reason: 'cooldown',
+          retryAfterMs: cooldownRemaining
+        };
+      }
+
+      const expiresAt = now + Math.max(30_000, Number(ttlMs) || BROWSER_LEASE_TTL_MS);
+      await this.ctx.storage.put({
+        browserLease: { token, acquiredAt: now, expiresAt },
+        browserLastLaunchAt: now
+      });
+      return { acquired: true, token, acquiredAt: now, expiresAt };
+    });
+  }
+
+  async releaseBrowserLease(token) {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const lease = await this.ctx.storage.get('browserLease');
+      if (lease?.token === token) await this.ctx.storage.delete('browserLease');
+      return { released: lease?.token === token };
+    });
+  }
 }
 
 function getSessionStore(env) {
   return env.IGO_SESSION_STORE.getByName(SESSION_OBJECT_NAME);
+}
+
+function wait(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+function isBrowserLaunchRateLimit(error) {
+  const message = String(error?.message || error || '');
+  return /429|rate\s*limit|too many browser/i.test(message);
+}
+
+function friendlyBrowserError(error) {
+  const message = String(error?.message || error || '');
+  if (/daily|per day|time limit.*today|browser time limit/i.test(message)) {
+    return new Error('Load Sheet servisi günlük kullanım sınırına ulaştı. Cache verileri kullanılabilir; canlı sorgu daha sonra yeniden açılacak.');
+  }
+  if (isBrowserLaunchRateLimit(error) || error?.code === 'BROWSER_BUSY') {
+    return new Error('Load Sheet servisi şu an yoğun. Kısa süre sonra yeniden dene.');
+  }
+  return error instanceof Error ? error : new Error(message || 'Load Sheet sorgusu başarısız.');
+}
+
+async function openQueuedBrowser(env, { waitMs = 0, leaseTtlMs = BROWSER_LEASE_TTL_MS, keepAliveMs = 240_000 } = {}) {
+  const store = getSessionStore(env);
+  const token = crypto.randomUUID();
+  const deadline = Date.now() + Math.max(0, waitMs);
+  let rateLimitRetries = 0;
+
+  while (true) {
+    const lease = await store.acquireBrowserLease(token, leaseTtlMs);
+    if (!lease?.acquired) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return null;
+      await wait(Math.min(Math.max(500, Number(lease?.retryAfterMs) || 1_000), remaining, 2_000));
+      continue;
+    }
+
+    try {
+      const browser = await launch(env.BROWSER, { keep_alive: keepAliveMs });
+      return { browser, token, store };
+    } catch (error) {
+      await store.releaseBrowserLease(token).catch(() => {});
+      if (isBrowserLaunchRateLimit(error) && rateLimitRetries < 1) {
+        rateLimitRetries += 1;
+        const remaining = deadline - Date.now();
+        if (remaining > BROWSER_LAUNCH_COOLDOWN_MS) {
+          await wait(BROWSER_LAUNCH_COOLDOWN_MS);
+          continue;
+        }
+      }
+      throw friendlyBrowserError(error);
+    }
+  }
+}
+
+async function closeQueuedBrowser(handle) {
+  if (!handle) return;
+  try {
+    await handle.browser?.close().catch(() => {});
+  } finally {
+    await handle.store?.releaseBrowserLease(handle.token).catch(() => {});
+  }
 }
 
 function json(data, status = 200) {
@@ -568,7 +675,14 @@ async function refreshLoadSheetCache(env) {
   const saved = await store.getSession();
   if (!saved?.storageState) return { skipped: true, reason: 'session-missing' };
 
-  const browser = await launch(env.BROWSER, { keep_alive: 240_000 });
+  let browserHandle;
+  try {
+    browserHandle = await openQueuedBrowser(env, { waitMs: 0, keepAliveMs: 240_000 });
+  } catch (error) {
+    return { skipped: true, reason: isBrowserLaunchRateLimit(error) ? 'browser-rate-limit' : 'browser-launch-failed' };
+  }
+  if (!browserHandle) return { skipped: true, reason: 'browser-busy' };
+  const { browser } = browserHandle;
   let context;
   try {
     context = await browser.newContext({ storageState: saved.storageState });
@@ -630,7 +744,7 @@ async function refreshLoadSheetCache(env) {
     return { skipped: false, found: candidates.length, refreshed, waitingForFinal, failed };
   } finally {
     await context?.close().catch(() => {});
-    await browser.close().catch(() => {});
+    await closeQueuedBrowser(browserHandle);
   }
 }
 
@@ -642,7 +756,17 @@ async function runQuery(env, input, emit) {
     emit({ type: 'result', data: cachedLoadSheetResult(cached) });
     return;
   }
-  const browser = await launch(env.BROWSER, { keep_alive: 600_000 });
+  const browserHandle = await openQueuedBrowser(env, {
+    waitMs: BROWSER_QUERY_WAIT_MS,
+    leaseTtlMs: BROWSER_LEASE_TTL_MS,
+    keepAliveMs: 600_000
+  });
+  if (!browserHandle) {
+    const error = new Error('Load Sheet servisi şu an yoğun. Kısa süre sonra yeniden dene.');
+    error.code = 'BROWSER_BUSY';
+    throw error;
+  }
+  const { browser } = browserHandle;
 
   try {
     const { context, page, reused } = await openIgoSession(env, browser, emit);
@@ -679,7 +803,7 @@ async function runQuery(env, input, emit) {
     }
     throw error;
   } finally {
-    await browser.close().catch(() => {});
+    await closeQueuedBrowser(browserHandle);
   }
 }
 
