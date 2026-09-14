@@ -1,6 +1,6 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v2.0.0
+ * Version: v1.6.0b
  * Production credentials come from EWS_USERNAME / EWS_PASSWORD Worker secrets.
  * Credentials never leave Worker secrets.
  */

@@ -1,6 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
+  const CLIENT_VERSION = '1.6.0b';
   let accessCode = '';
 
   function config() {
@@ -148,6 +149,7 @@
   }
 
   global.OtoBeyanApi = Object.freeze({
+    version: CLIENT_VERSION,
     setAccessCode,
     clearAccessCode,
     isUnlocked,

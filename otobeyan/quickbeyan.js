@@ -1,3 +1,5 @@
+const QUICKBEYAN_VERSION = '1.6.0b';
+
 const state = {
   busy: false,
   lastContext: null,
@@ -237,8 +239,8 @@ async function checkIgoConnectivity() {
     const health = await globalThis.OtoBeyanApi?.health?.();
     if (health?.ok && health?.ready) {
       status.textContent = health.sessionReady
-        ? 'Bağlantı hazır'
-        : 'İlk sorguda oturum onayı gerekebilir';
+        ? `Bağlantı hazır · v${QUICKBEYAN_VERSION}`
+        : `İlk sorguda oturum onayı gerekebilir · v${QUICKBEYAN_VERSION}`;
       return;
     }
   } catch (_) {}

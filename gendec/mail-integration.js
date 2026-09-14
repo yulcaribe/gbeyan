@@ -1,6 +1,6 @@
 /*
  * Beyan <-> TGS Exchange mail integration
- * Version: v1.5.5b
+ * Version: v1.6.0b
  * Credentials live only in this page's JavaScript memory and are cleared on logout/reload.
  */
 (function initBeyanMailIntegration() {

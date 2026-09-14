@@ -12,6 +12,7 @@ import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
+const RELEASE_VERSION = '1.6.0b';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
@@ -743,6 +744,7 @@ export default {
       }
       return json({
         ok: true,
+        version: RELEASE_VERSION,
         ready: Boolean(
           env.BROWSER && env.IGO_SESSION_STORE && env.IGO_USERNAME && env.IGO_PASSWORD
           && env.EWS_USERNAME && env.EWS_PASSWORD
@@ -781,6 +783,7 @@ export default {
       })).filter(message => message.attachments.length);
       return json({
         ok: true,
+        version: RELEASE_VERSION,
         loadSheetCachedAt: loadSheetSnapshot?.cachedAt || null,
         genDecCachedAt: mailSnapshot?.cachedAt || null,
         loadSheets,

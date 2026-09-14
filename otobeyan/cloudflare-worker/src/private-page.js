@@ -51,7 +51,7 @@ const PRIVATE_PAGE = String.raw`<!doctype html>
       }
       function render(data) {
         const stats = document.getElementById('stats'); stats.replaceChildren();
-        [['Load Sheet', data.loadSheets.length], ['GenDec', data.genDec.length], ['Load Sheet güncelleme', date(data.loadSheetCachedAt)], ['GenDec güncelleme', date(data.genDecCachedAt)]].forEach(([label,value]) => {
+        [['Sürüm', data.version], ['Load Sheet', data.loadSheets.length], ['GenDec', data.genDec.length], ['Load Sheet güncelleme', date(data.loadSheetCachedAt)], ['GenDec güncelleme', date(data.genDecCachedAt)]].forEach(([label,value]) => {
           const box=document.createElement('div'); box.className='stat'; const span=document.createElement('span'); span.textContent=label; const strong=document.createElement('strong'); strong.textContent=text(value); box.append(span,strong); stats.appendChild(box);
         });
         table('loadSheets',['Tarih','Sefer','Rota','Kuyruk','PAX','INF','Offblock','EDNO','Durum','Cache'],data.loadSheets,(row,item) => {
