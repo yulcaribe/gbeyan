@@ -192,6 +192,12 @@ async function fillLogin(page, env) {
   await username.fill(env.IGO_USERNAME);
   await password.fill(env.IGO_PASSWORD);
 
+  const usernameReady = (await username.inputValue()) === String(env.IGO_USERNAME);
+  const passwordReady = (await password.inputValue()) === String(env.IGO_PASSWORD);
+  if (!usernameReady || !passwordReady) {
+    throw new Error('iGO kullanıcı adı/parolası Worker secret değerlerinden forma aktarılamadı.');
+  }
+
   // Live View'da kullanıcı adı açık metin görünmesin. Değer input içinde
   // kaldığı için iGO form gönderimi değişmeden çalışır.
   await page.addStyleTag({
@@ -272,7 +278,7 @@ async function openIgoSession(env, browser, emit) {
 
   emit({
     type: 'captcha',
-    message: 'Live View’u aç, CAPTCHA’yı tamamla ve iGO giriş düğmesine bas.',
+    message: 'Kullanıcı adı ve parola Worker secret değerlerinden dolduruldu. Live View’u aç, yalnız CAPTCHA’yı tamamlayıp giriş düğmesine bas.',
     liveViewUrl: await createLiveView(context, page)
   });
 

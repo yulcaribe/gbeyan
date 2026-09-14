@@ -5,7 +5,9 @@ const state = {
   lastContext: null,
   crews: [],
   igoResult: null,
-  actionPanel: null
+  actionPanel: null,
+  crewPanel: null,
+  igoPanel: null
 };
 
 const HGBS_CREW_TYPES = {
@@ -112,10 +114,10 @@ function installStyles() {
     #otobeyanOverlay{position:fixed;inset:0;z-index:2300;display:none;place-items:center;padding:22px;background:#0f172a99;backdrop-filter:blur(2px)}
     #otobeyanOverlay.open{display:grid}#otobeyanPanel{width:min(980px,calc(100vw - 28px));height:min(760px,calc(100vh - 28px));display:grid;grid-template-rows:auto 1fr;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 22px 70px #0f172a66;overflow:hidden}
     .otobeyan-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;background:#172554;color:#fff}.otobeyan-title{font-size:17px;font-weight:800}.otobeyan-sub{font-size:11px;color:#c7d2fe;margin-top:2px}.otobeyan-actions{display:flex;gap:6px}.otobeyan-head button{border:1px solid #ffffff40;background:#ffffff16;color:#fff;border-radius:7px;padding:6px 8px;cursor:pointer}
-    #otobeyanMessages{padding:18px;overflow:auto;background:#f8fafc;display:flex;flex-direction:column;gap:10px}.otobeyan-message{width:100%;padding:11px 13px;border-radius:11px;font-size:13px;line-height:1.45;white-space:pre-wrap;background:#fff;border:1px solid #e2e8f0;color:#334155}.otobeyan-message.error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.otobeyan-message.success{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.otobeyan-message strong{font-weight:800}
-    .otobeyan-quick-btn{margin-top:5px;border:1px solid #2563eb;border-radius:7px;background:#eff6ff;color:#1d4ed8;padding:6px 9px;font:800 11px/1.1 inherit;cursor:pointer;white-space:nowrap}.otobeyan-quick-btn:hover{background:#dbeafe}.otobeyan-quick-btn:disabled{opacity:.55;cursor:wait}.otobeyan-card{margin-top:7px;padding-top:7px;border-top:1px solid #e2e8f0}.otobeyan-card>div{display:flex;justify-content:space-between;gap:10px;margin-top:3px}.otobeyan-card span:first-child{color:#64748b}.otobeyan-pill{display:inline-block;margin-top:7px;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:11px;font-weight:800}
-    .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:8px;margin-top:9px}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:10px;padding:9px;background:#f8fafc}.otobeyan-crew-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;font-weight:800}.otobeyan-crew-head button{border:0;background:#fee2e2;color:#991b1b;border-radius:6px;padding:4px 7px;cursor:pointer}.otobeyan-crew-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.otobeyan-crew-field{display:flex;flex-direction:column;gap:3px}.otobeyan-crew-field.full{grid-column:1/-1}.otobeyan-crew-field label{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:800}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:7px;background:#fff;padding:7px;font:inherit;color:#0f172a}.otobeyan-source-arrow{font-size:10px;color:#64748b;margin-top:4px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;padding:8px 10px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.otobeyan-review label{display:flex;flex-direction:column;gap:3px;font-size:9px;text-transform:uppercase;color:#64748b;font-weight:800}
-    @media(max-width:520px){#otobeyanOverlay{padding:8px}#otobeyanPanel{width:100%;height:100%;border-radius:10px}.otobeyan-review,.otobeyan-crew-grid{grid-template-columns:1fr}}
+    #otobeyanMessages{padding:12px;overflow:auto;background:#f8fafc;display:flex;flex-direction:column;gap:6px}.otobeyan-message{width:100%;padding:8px 10px;border-radius:9px;font-size:12px;line-height:1.35;white-space:pre-wrap;background:#fff;border:1px solid #e2e8f0;color:#334155}.otobeyan-message.error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.otobeyan-message.success{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.otobeyan-message strong{font-weight:800}
+    .otobeyan-quick-btn{margin-top:5px;border:1px solid #2563eb;border-radius:7px;background:#eff6ff;color:#1d4ed8;padding:6px 9px;font:800 11px/1.1 inherit;cursor:pointer;white-space:nowrap}.otobeyan-quick-btn:hover{background:#dbeafe}.otobeyan-quick-btn:disabled{opacity:.55;cursor:wait}.otobeyan-card{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin-top:6px}.otobeyan-card>div{display:grid;gap:1px;padding:6px 8px;border:1px solid #dbe3ee;border-radius:7px;background:#fff}.otobeyan-card span:first-child{color:#64748b;font-size:9px;text-transform:uppercase}.otobeyan-pill{display:inline-block;margin-top:6px;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:10px;font-weight:800}
+    .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:3px;margin-top:6px;overflow-x:auto}.otobeyan-crew-row,.otobeyan-crew-columns{display:grid;grid-template-columns:26px 68px 118px minmax(90px,1fr) minmax(100px,1fr) 52px 104px 62px minmax(110px,1.1fr) 28px;gap:4px;align-items:center;min-width:850px}.otobeyan-crew-columns{padding:0 4px;color:#64748b;font-size:8px;font-weight:800;text-transform:uppercase}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:7px;padding:4px;background:#f8fafc}.otobeyan-crew-no{text-align:center;font-weight:800;color:#475569}.otobeyan-crew-field{min-width:0}.otobeyan-crew-field span{display:none}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;height:29px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:5px;background:#fff;padding:4px 5px;font:11px inherit;color:#0f172a}.otobeyan-remove-crew{border:0;background:#fee2e2;color:#991b1b;border-radius:5px;width:26px;height:26px;padding:0;cursor:pointer}.otobeyan-source-arrow{font-size:9px;color:#64748b;margin-top:3px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;padding:7px 10px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr)) auto;gap:7px;margin-top:6px;align-items:end}.otobeyan-review label{display:flex;flex-direction:column;gap:2px;font-size:8px;text-transform:uppercase;color:#64748b;font-weight:800}.otobeyan-review .otobeyan-inline-actions{margin:0;flex-wrap:nowrap}
+    @media(max-width:720px){#otobeyanOverlay{padding:8px}#otobeyanPanel{width:100%;height:100%;border-radius:10px}.otobeyan-card{grid-template-columns:repeat(2,minmax(0,1fr))}.otobeyan-review{grid-template-columns:1fr 1fr}.otobeyan-review .otobeyan-inline-actions{grid-column:1/-1}}
   `;
   document.head.appendChild(style);
 }
@@ -191,6 +193,8 @@ async function startQuickBeyan(rowIndex, triggerButton) {
   state.igoResult = null;
   state.declaration = null;
   clearActionPanel();
+  state.crewPanel = null;
+  state.igoPanel = null;
   const messages = document.getElementById('otobeyanMessages');
   if (messages) messages.innerHTML = '';
   const title = document.getElementById('otobeyanTitle');
@@ -263,20 +267,13 @@ function setBusy(busy) {
 
 async function checkIgoConnectivity() {
   const status = document.getElementById('otobeyanStatus');
-  try {
-    const result = await extensionRequest('STATUS', {}, 1_500);
-    state.extensionAvailable = true;
-    status.textContent = result.authenticated
-      ? 'Chrome köprüsü · iGO bağlı'
-      : result.tabOpen
-        ? 'Chrome köprüsü hazır · iGO girişi bekleniyor'
-        : 'Chrome köprüsü hazır · iGO sekmesi otomatik açılır';
-    return;
-  } catch {
-    state.extensionAvailable = false;
-  }
+  state.extensionAvailable = false;
   try {
     const health = await globalThis.OtoBeyanApi?.health?.();
+    if (health && (!health.usernameSecret || !health.passwordSecret)) {
+      status.textContent = 'Worker’da IGO_USERNAME / IGO_PASSWORD secret eksik';
+      return;
+    }
     if (health?.browserBinding && health?.sessionStoreBinding) {
       status.textContent = health.sessionCached
         ? 'OtoBeyan Worker · iGO oturumu hazır'
@@ -288,19 +285,6 @@ async function checkIgoConnectivity() {
 }
 
 async function openIgoLogin() {
-  if (state.extensionAvailable) {
-    try {
-      const result = await extensionRequest('OPEN_LOGIN');
-      addMessage(result.authenticated
-        ? 'iGO oturumu açık. Arama yapabilirsin.'
-        : 'iGO sekmesini açtım. Girişi orada tamamla; eklenti parolanı görmez.', result.authenticated ? 'success' : 'bot');
-      await checkIgoConnectivity();
-      return;
-    } catch (error) {
-      addMessage(error.message, 'error');
-      return;
-    }
-  }
   addMessage('iGO girişi gerekiyorsa ilk Load Sheet sorgusunda güvenli Live View bağlantısı açılacak. Oturum Worker’da saklandığı için sonraki sorgularda tekrar CAPTCHA istenmez.', 'bot');
 }
 
@@ -454,11 +438,11 @@ function crewTypeOptions(selected) {
 }
 
 function crewField(label, index, key, value, options = {}) {
-  const className = options.full ? 'otobeyan-crew-field full' : 'otobeyan-crew-field';
+  const className = 'otobeyan-crew-field';
   if (options.select) {
-    return `<label class="${className}"><span>${escapeHtml(label)}</span><select data-crew-index="${index}" data-crew-key="${key}">${options.select}</select></label>`;
+    return `<label class="${className}" title="${escapeHtml(label)}"><span>${escapeHtml(label)}</span><select aria-label="${escapeHtml(label)}" data-crew-index="${index}" data-crew-key="${key}">${options.select}</select></label>`;
   }
-  return `<label class="${className}"><span>${escapeHtml(label)}</span><input ${options.type ? `type="${options.type}"` : ''} value="${escapeHtml(value)}" data-crew-index="${index}" data-crew-key="${key}"></label>`;
+  return `<label class="${className}" title="${escapeHtml(label)}"><span>${escapeHtml(label)}</span><input ${options.type ? `type="${options.type}"` : ''} aria-label="${escapeHtml(label)}" value="${escapeHtml(value)}" data-crew-index="${index}" data-crew-key="${key}"></label>`;
 }
 
 function bindCrewEditor(editor) {
@@ -480,33 +464,34 @@ function bindCrewEditor(editor) {
 function renderCrewEditor(crews, source) {
   if (!crews?.length) return;
   state.crews = crews.map(cloneCrew);
+  state.crewPanel?.remove?.();
   const captain = state.crews.find(crew => crew.crewTypeCode === 'CP');
   const message = addMessage('', 'success');
   message.classList.add('otobeyan-wide');
   message.innerHTML = `<strong>${escapeHtml(source)} · ${state.crews.length} ekip</strong>${captain ? ` · Kaptan: ${escapeHtml(`${captain.name} ${captain.surname}`.trim())}` : ''}
     <div class="otobeyan-crew-list">
+      <div class="otobeyan-crew-columns"><span>#</span><span>Kaynak</span><span>HGBS Görev</span><span>Ad</span><span>Soyad</span><span>Uyruk</span><span>Doğum</span><span>Belge</span><span>Belge No</span><span></span></div>
       ${state.crews.map((crew, index) => `
         <div class="otobeyan-crew-row">
-          <div class="otobeyan-crew-head"><span>#${index + 1} Ekip</span><button type="button" data-remove-crew="${index}">Sil</button></div>
-          <div class="otobeyan-crew-grid">
-            ${crewField('PDF / Kaynak Crew Type', index, 'sourceTypeCode', crew.sourceTypeCode)}
-            ${crewField('HGBS Crew Type', index, 'crewTypeCode', crew.crewTypeCode, { select: crewTypeOptions(crew.crewTypeCode) })}
-            ${crewField('Ad', index, 'name', crew.name)}
-            ${crewField('Soyad', index, 'surname', crew.surname)}
-            ${crewField('Milliyet', index, 'nationalityCode', crew.nationalityCode)}
-            ${crewField('Doğum Tarihi', index, 'dateOfBirth', crew.dateOfBirth, { type: 'date' })}
-            ${crewField('Belge Tipi', index, 'identityCode', crew.identityCode)}
-            ${crewField('Belge No', index, 'identityNumber', crew.identityNumber)}
-          </div>
-          <div class="otobeyan-source-arrow">Kaynak görev yalnız izleme/düzeltme içindir → HGBS'ye seçilen görev gönderilir.</div>
+          <span class="otobeyan-crew-no">${index + 1}</span>
+          ${crewField('PDF / Kaynak Crew Type', index, 'sourceTypeCode', crew.sourceTypeCode)}
+          ${crewField('HGBS Crew Type', index, 'crewTypeCode', crew.crewTypeCode, { select: crewTypeOptions(crew.crewTypeCode) })}
+          ${crewField('Ad', index, 'name', crew.name)}
+          ${crewField('Soyad', index, 'surname', crew.surname)}
+          ${crewField('Milliyet', index, 'nationalityCode', crew.nationalityCode)}
+          ${crewField('Doğum Tarihi', index, 'dateOfBirth', crew.dateOfBirth, { type: 'date' })}
+          ${crewField('Belge Tipi', index, 'identityCode', crew.identityCode)}
+          ${crewField('Belge No', index, 'identityNumber', crew.identityNumber)}
+          <button class="otobeyan-remove-crew" type="button" title="Ekibi sil" data-remove-crew="${index}">×</button>
         </div>`).join('')}
     </div>
-    <div class="otobeyan-inline-actions"><button class="otobeyan-btn" type="button" data-add-crew>+ Ekip Ekle</button></div>`;
+    <div class="otobeyan-inline-actions"><button class="otobeyan-btn" type="button" data-add-crew>+ Ekip</button></div>`;
   bindCrewEditor(message);
   message.querySelector('[data-add-crew]').addEventListener('click', () => {
     state.crews.push(cloneCrew({ sourceTypeCode: 'MANUEL', crewTypeCode: 'CA' }, state.crews.length));
     renderCrewEditor(state.crews, 'Düzenlenen ekip');
   });
+  state.crewPanel = message;
   renderActionPanel();
 }
 
@@ -546,23 +531,6 @@ async function submitText() {
 
 async function runIgoQuery(context) {
   setBusy(true);
-  if (state.extensionAvailable) {
-    addMessage(`${context.flightNumber} / ${context.flightDate} iGO’da Chrome köprüsüyle aranıyor…`, 'bot');
-    try {
-      const result = await extensionRequest('SEARCH_FLIGHT', context);
-      if (result.status !== 'ready') {
-        addMessage(result.warnings?.[0] || 'Uçuş bulundu fakat Load Sheet henüz hazır değil.', 'error');
-      } else {
-        renderIgoResult(result);
-      }
-    } catch (error) {
-      addMessage(error.message, 'error');
-    } finally {
-      setBusy(false);
-      checkIgoConnectivity();
-    }
-    return;
-  }
   if (globalThis.OtoBeyanApi?.queryIgo) {
     addMessage(`${context.flightNumber} / ${context.flightDate} iGO’da OtoBeyan Worker ile aranıyor…`, 'bot');
     let liveViewWindow = null;
@@ -572,7 +540,7 @@ async function runIgoQuery(context) {
         flightDate: context.flightDate
       }, event => {
         if (event.type === 'captcha' && event.liveViewUrl) {
-          const message = addMessage('iGO oturumu için CAPTCHA onayı gerekiyor.', 'bot');
+          const message = addMessage(event.message || 'iGO kullanıcı bilgileri otomatik dolduruldu; yalnız CAPTCHA onayı gerekiyor.', 'bot');
           const link = document.createElement('a');
           link.href = event.liveViewUrl;
           link.target = '_blank';
@@ -610,6 +578,7 @@ function renderIgoResult(result) {
   const sheet = result.loadSheet;
   const field = name => sheet.fields?.[name]?.value ?? sheet[name] ?? '—';
   const finalized = sheet.finalized;
+  state.igoPanel?.remove?.();
   const message = `
     <strong>${escapeHtml(flight.flightNumber)} · ${escapeHtml(flight.flightDate)}</strong>
     <div class="otobeyan-card">
@@ -620,7 +589,7 @@ function renderIgoResult(result) {
       <div><span>Load Sheet</span><strong>EDNO ${escapeHtml(field('edno'))}</strong></div>
     </div>
     <span class="otobeyan-pill">${finalized ? '✓ Digitally Signed' : '⚠ Finalize edilmedi'}</span>`;
-  addMessage(message, finalized ? 'success' : 'error', true);
+  state.igoPanel = addMessage(message, finalized ? 'success' : 'error', true);
   state.declaration = {
     pax: Number(field('pax')) || 0,
     infant: Number(field('infant')) || 0,
@@ -668,10 +637,10 @@ function renderActionPanel() {
       <label>INFANT<input type="number" min="0" data-declaration="infant" value="${escapeHtml(declaration.infant)}"></label>
       <label>OffBlock Fuel KG<input type="number" min="0" data-declaration="fuel" value="${escapeHtml(declaration.fuel)}"></label>
       <label>HGBS Yakıt Alanı<select data-declaration="fuelType"><option value="national"${declaration.fuelType === 'national' ? ' selected' : ''}>Milli</option><option value="foreign"${declaration.fuelType === 'foreign' ? ' selected' : ''}>Yabancı</option></select></label>
-    </div>
-    <div class="otobeyan-inline-actions">
-      <button class="otobeyan-btn primary" type="button" data-open-only>Sadece Uçuşu Aç</button>
-      <button class="otobeyan-btn success" type="button" data-open-declare ${combinedReady ? '' : 'disabled'}>Uçuşu Aç + Beyan Et</button>
+      <div class="otobeyan-inline-actions">
+        <button class="otobeyan-btn primary" type="button" data-open-only>Sadece Uçuşu Aç</button>
+        <button class="otobeyan-btn success" type="button" data-open-declare ${combinedReady ? '' : 'disabled'}>Aç + Beyan Et</button>
+      </div>
     </div>
     ${combinedReady ? '<div class="otobeyan-source-arrow">İkinci seçenek ekip + yolcu + infant + yakıtı kaydeder ve gümrüğe sunar. Son onay HGBS uçuş penceresinde verilir.</div>' : '<div class="otobeyan-source-arrow">Aç + Beyan Et için önce ekip PDF bulunmalı veya yüklenmeli.</div>'}`;
   message.querySelectorAll('[data-declaration]').forEach(control => {
