@@ -8,6 +8,20 @@
   "browser": {
     "binding": "BROWSER"
   },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "IGO_SESSION_STORE",
+        "class_name": "IgoSessionStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["IgoSessionStore"]
+    }
+  ],
   "observability": {
     "enabled": true
   }

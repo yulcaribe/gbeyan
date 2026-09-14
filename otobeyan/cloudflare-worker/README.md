@@ -1,8 +1,13 @@
-# OtoBeyan iGO Worker testi
+# OtoBeyan iGO Worker
 
-Bu proje, `@cloudflare/playwright` paketini Cloudflare Workers Builds sırasında
-kurup bundle etmek için hazırlanmıştır. Worker kodunu dashboard editörüne tek
-başına yapıştırmak yeterli değildir.
+Bu proje `@cloudflare/playwright` paketini Cloudflare Workers Builds sırasında
+kurup bundle eder. Worker kodunu dashboard editörüne tek başına yapıştırmak
+yeterli değildir.
+
+İlk iGO girişinde CAPTCHA kullanıcı tarafından Live View'da tamamlanır. Başarılı
+girişin cookie ve tarayıcı storage durumu SQLite tabanlı Durable Object içinde
+saklanır. Sonraki Load Sheet sorguları kayıtlı oturumu kullanır; iGO oturumu
+gerçekten sona erdiğinde tekrar CAPTCHA istenir.
 
 ## Wrangler kurmadan yayınlama
 
@@ -19,9 +24,13 @@ başına yapıştırmak yeterli değildir.
    - `TEST_API_KEY` (sizin belirleyeceğiniz test ekranı parolası)
 7. Yeniden deploy edin ve Worker URL'sini açın.
 
-`BROWSER` Browser Run binding'i `wrangler.jsonc` içinde tanımlıdır. CAPTCHA
-otomatik çözülmez; test sırasında açılan Live View bağlantısında kullanıcı
-tarafından tamamlanır.
+`BROWSER` Browser Run ve `IGO_SESSION_STORE` Durable Object binding'leri
+`wrangler.jsonc` içinde tanımlıdır; ayrıca dashboard'dan oluşturulmaları
+gerekmez. Durable Object ilk deployment sırasında `v1` migration ile oluşturulur.
+
+`GET /health` binding, secret ve kayıtlı oturum durumunu gösterir. `POST /query`
+Load Sheet sorgusunu çalıştırır. Yetkili `POST /session/reset` isteği kayıtlı iGO
+oturumunu temizler. Eski `/test` adresi geçiş uyumluluğu için korunmuştur.
 
 ## Güvenlik
 

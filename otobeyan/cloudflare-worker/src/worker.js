@@ -1,15 +1,49 @@
-// OtoBeyan iGO Browser Run POC
+// OtoBeyan iGO Browser Run
 // Bu dosya Cloudflare Workers Builds tarafından package.json ile bundle edilir.
 // Browser binding adı: BROWSER
-// Cloudflare Git build tetikleyicisi.
 // Gerekli Worker Secret'ları: IGO_USERNAME, IGO_PASSWORD, TEST_API_KEY
-// CAPTCHA otomatik çözülmez; kullanıcı Live View ekranında kendisi tamamlar.
+// CAPTCHA otomatik çözülmez. Yalnız kayıtlı iGO oturumu yoksa/sona erdiyse
+// kullanıcı Live View ekranında kendisi tamamlar.
 
 import { launch } from '@cloudflare/playwright';
+import { DurableObject } from 'cloudflare:workers';
 
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
+const SESSION_OBJECT_NAME = 'primary-igo-session';
+
+export class IgoSessionStore extends DurableObject {
+  async getSession() {
+    return (await this.ctx.storage.get('session')) || null;
+  }
+
+  async saveSession(storageState) {
+    const record = {
+      storageState,
+      savedAt: new Date().toISOString()
+    };
+    await this.ctx.storage.put('session', record);
+    return { savedAt: record.savedAt };
+  }
+
+  async clearSession() {
+    await this.ctx.storage.delete('session');
+    return { cleared: true };
+  }
+
+  async getStatus() {
+    const record = await this.ctx.storage.get('session');
+    return {
+      cached: Boolean(record?.storageState),
+      savedAt: record?.savedAt || null
+    };
+  }
+}
+
+function getSessionStore(env) {
+  return env.IGO_SESSION_STORE.getByName(SESSION_OBJECT_NAME);
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -182,6 +216,53 @@ async function waitForHumanLogin(page, timeoutMs = 480_000) {
   throw new Error('CAPTCHA/giriş için ayrılan 8 dakika doldu. Testi yeniden başlat.');
 }
 
+async function saveSessionState(env, context) {
+  const storageState = await context.storageState({ indexedDB: true });
+  return getSessionStore(env).saveSession(storageState);
+}
+
+async function openIgoSession(env, browser, emit) {
+  const store = getSessionStore(env);
+  const saved = await store.getSession();
+
+  if (saved?.storageState) {
+    emit({ type: 'progress', message: 'Kayıtlı iGO oturumu kontrol ediliyor…' });
+    const context = await browser.newContext({ storageState: saved.storageState });
+    const page = await context.newPage();
+    await gotoWithAbortRetry(page, FLIGHT_LIST_URL);
+
+    if (!isLoginUrl(page.url())) {
+      emit({ type: 'session', reused: true, message: 'Kayıtlı iGO oturumu kullanıldı; CAPTCHA gerekmedi.' });
+      await saveSessionState(env, context);
+      return { context, page, reused: true };
+    }
+
+    emit({ type: 'progress', message: 'Kayıtlı iGO oturumu sona ermiş; yeniden giriş gerekiyor.' });
+    await context.close().catch(() => {});
+    await store.clearSession();
+  }
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  emit({ type: 'progress', message: 'iGO login sayfası açılıyor…' });
+  await fillLogin(page, env);
+
+  emit({
+    type: 'captcha',
+    message: 'Live View’u aç, CAPTCHA’yı tamamla ve iGO giriş düğmesine bas.',
+    liveViewUrl: await createLiveView(context, page)
+  });
+
+  await waitForHumanLogin(page);
+  emit({ type: 'progress', message: 'iGO girişi başarılı; oturum güvenli depoya kaydediliyor…' });
+
+  await gotoWithAbortRetry(page, FLIGHT_LIST_URL);
+  if (isLoginUrl(page.url())) throw new Error('iGO oturumu doğrulanamadı.');
+  await saveSessionState(env, context);
+  emit({ type: 'session', reused: false, message: 'iGO oturumu kaydedildi; sonraki sorgularda CAPTCHA istenmeyecek.' });
+  return { context, page, reused: false };
+}
+
 async function searchGrid(page, flight, date) {
   return page.evaluate(async args => {
     function cellText(cell) {
@@ -253,28 +334,14 @@ async function fetchLoadSheet(context, selected) {
   }
 }
 
-async function runTest(env, input, emit) {
+async function runQuery(env, input, emit) {
   const flight = splitFlightNumber(input.flightNumber);
   const date = splitDate(input.flightDate);
   const browser = await launch(env.BROWSER, { keep_alive: 600_000 });
 
   try {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    emit({ type: 'progress', message: 'iGO login sayfası açılıyor…' });
-    await fillLogin(page, env);
-
-    emit({
-      type: 'captcha',
-      message: 'Live View’u aç, CAPTCHA’yı tamamla ve iGO giriş düğmesine bas.',
-      liveViewUrl: await createLiveView(context, page)
-    });
-
-    await waitForHumanLogin(page);
-    emit({ type: 'progress', message: 'iGO girişi başarılı. Uçuş aranıyor…' });
-
-    await gotoWithAbortRetry(page, FLIGHT_LIST_URL);
-    if (isLoginUrl(page.url())) throw new Error('iGO oturumu doğrulanamadı.');
+    const { context, page, reused } = await openIgoSession(env, browser, emit);
+    emit({ type: 'progress', message: 'Uçuş aranıyor…' });
 
     const rows = await searchGrid(page, flight, date);
     const candidates = rows.filter(row =>
@@ -290,21 +357,28 @@ async function runTest(env, input, emit) {
 
     emit({ type: 'progress', message: `Load Sheet ID ${selected.wbMainId} okunuyor…` });
     const loadSheet = await fetchLoadSheet(context, selected);
+    await saveSessionState(env, context);
     emit({
       type: 'result',
       data: {
         status: 'ready',
+        igoSessionReused: reused,
         query: { flightNumber: flight.normalized, flightDate: date.normalized },
         flight: selected,
         loadSheet
       }
     });
+  } catch (error) {
+    if (/oturumu (sona erdi|doğrulanamadı)/i.test(String(error?.message || error))) {
+      await getSessionStore(env).clearSession().catch(() => {});
+    }
+    throw error;
   } finally {
     await browser.close().catch(() => {});
   }
 }
 
-function testStream(env, input) {
+function queryStream(env, input) {
   const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
@@ -313,8 +387,8 @@ function testStream(env, input) {
         if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
       };
 
-      runTest(env, input, emit)
-        .catch(error => emit({ type: 'error', message: error.message || 'Test başarısız.' }))
+      runQuery(env, input, emit)
+        .catch(error => emit({ type: 'error', message: error.message || 'Sorgu başarısız.' }))
         .finally(() => {
           closed = true;
           controller.close();
@@ -323,12 +397,12 @@ function testStream(env, input) {
   });
 }
 
-const TEST_PAGE = String.raw`<!doctype html>
+const APP_PAGE = String.raw`<!doctype html>
 <html lang="tr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OtoBeyan iGO Worker Test</title>
+  <title>OtoBeyan iGO</title>
   <style>
     body{margin:0;background:#f1f5f9;color:#172554;font:14px/1.45 system-ui,sans-serif}
     main{max-width:680px;margin:40px auto;padding:24px;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 18px 45px #0f172a18}
@@ -341,14 +415,14 @@ const TEST_PAGE = String.raw`<!doctype html>
 </head>
 <body>
   <main>
-    <h1>OtoBeyan iGO Worker Test</h1>
-    <div class="note">Şifre Worker Secret’tan okunur. CAPTCHA yalnız iGO Live View ekranında kullanıcı tarafından çözülür.</div>
+    <h1>OtoBeyan iGO</h1>
+    <div class="note">CAPTCHA yalnız ilk girişte veya iGO oturumu sona erdiğinde Live View üzerinden kullanıcı tarafından çözülür.</div>
     <div class="grid">
       <label>Sefer<input id="flight" value="XQ254"></label>
       <label>Tarih<input id="date" type="date"></label>
-      <label class="full">Test API Anahtarı<input id="key" type="password" autocomplete="off"></label>
+      <label class="full">OtoBeyan erişim anahtarı<input id="key" type="password" autocomplete="off"></label>
     </div>
-    <button id="start">Login + Load Sheet Testini Başlat</button>
+    <button id="start">Load Sheet Sorgula</button>
     <div id="live" class="live"></div>
     <div id="log">Hazır.</div>
     <div id="result" class="result"></div>
@@ -363,6 +437,7 @@ const TEST_PAGE = String.raw`<!doctype html>
     function append(text){ log.textContent += '\n' + text; log.scrollTop = log.scrollHeight; }
     function handleEvent(event){
       if(event.type === 'progress') append('• ' + event.message);
+      if(event.type === 'session') append('✓ ' + event.message);
       if(event.type === 'captcha'){
         append('• CAPTCHA kullanıcı onayı bekleniyor.');
         live.style.display = 'block';
@@ -377,9 +452,9 @@ const TEST_PAGE = String.raw`<!doctype html>
     }
 
     start.addEventListener('click', async () => {
-      start.disabled = true; live.style.display = 'none'; resultBox.style.display = 'none'; log.textContent = 'Test başlatılıyor…';
+      start.disabled = true; live.style.display = 'none'; resultBox.style.display = 'none'; log.textContent = 'Sorgu başlatılıyor…';
       try{
-        const response = await fetch('/test', {
+        const response = await fetch('/query', {
           method: 'POST',
           headers: {'Content-Type':'application/json','Authorization':'Bearer ' + document.getElementById('key').value},
           body: JSON.stringify({flightNumber:document.getElementById('flight').value,flightDate:document.getElementById('date').value})
@@ -404,29 +479,46 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'GET' && url.pathname === '/') {
-      return new Response(TEST_PAGE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      return new Response(APP_PAGE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 
     if (request.method === 'GET' && url.pathname === '/health') {
+      let session = { cached: false, savedAt: null };
+      if (env.IGO_SESSION_STORE) {
+        session = await getSessionStore(env).getStatus().catch(() => session);
+      }
       return json({
         ok: true,
         browserBinding: Boolean(env.BROWSER),
+        sessionStoreBinding: Boolean(env.IGO_SESSION_STORE),
+        sessionCached: session.cached,
+        sessionSavedAt: session.savedAt,
         usernameSecret: Boolean(env.IGO_USERNAME),
         passwordSecret: Boolean(env.IGO_PASSWORD),
         apiKeySecret: Boolean(env.TEST_API_KEY)
       });
     }
 
-    if (request.method !== 'POST' || url.pathname !== '/test') {
+    if (request.method === 'POST' && url.pathname === '/session/reset') {
+      if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
+        return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
+      }
+      if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
+      await getSessionStore(env).clearSession();
+      return json({ ok: true, message: 'Kayıtlı iGO oturumu temizlendi.' });
+    }
+
+    if (request.method !== 'POST' || (url.pathname !== '/query' && url.pathname !== '/test')) {
       return json({ ok: false, error: 'Endpoint bulunamadı.' }, 404);
     }
 
     if (!env.BROWSER) return json({ ok: false, error: 'BROWSER binding tanımlı değil.' }, 503);
+    if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
     if (!env.IGO_USERNAME || !env.IGO_PASSWORD || !env.TEST_API_KEY) {
       return json({ ok: false, error: 'IGO_USERNAME, IGO_PASSWORD veya TEST_API_KEY secret eksik.' }, 503);
     }
     if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
-      return json({ ok: false, error: 'Test API anahtarı geçersiz.' }, 401);
+      return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
     }
 
     let input;
@@ -438,7 +530,7 @@ export default {
       return json({ ok: false, error: error.message || 'İstek geçersiz.' }, 400);
     }
 
-    return new Response(testStream(env, input), {
+    return new Response(queryStream(env, input), {
       headers: {
         'Content-Type': 'application/x-ndjson; charset=utf-8',
         'Cache-Control': 'no-store',
