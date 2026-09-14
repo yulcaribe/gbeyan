@@ -109,13 +109,13 @@ function installStyles() {
   const style = document.createElement('style');
   style.id = 'otobeyanStyles';
   style.textContent = `
-    #otobeyanLauncher{position:fixed;right:22px;bottom:22px;z-index:2050;border:0;border-radius:999px;background:#172554;color:#fff;padding:12px 17px;font:700 13px/1.2 inherit;box-shadow:0 12px 30px #0f172a38;cursor:pointer}
-    #otobeyanPanel{position:fixed;right:22px;bottom:76px;z-index:2050;width:min(420px,calc(100vw - 24px));height:min(620px,calc(100vh - 110px));display:none;grid-template-rows:auto 1fr auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 22px 55px #0f172a40;overflow:hidden}
-    #otobeyanPanel.open{display:grid}.otobeyan-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;background:#172554;color:#fff}.otobeyan-title{font-weight:800}.otobeyan-sub{font-size:11px;color:#c7d2fe;margin-top:2px}.otobeyan-actions{display:flex;gap:6px}.otobeyan-head button{border:1px solid #ffffff40;background:#ffffff16;color:#fff;border-radius:7px;padding:6px 8px;cursor:pointer}
-    #otobeyanMessages{padding:14px;overflow:auto;background:#f8fafc;display:flex;flex-direction:column;gap:10px}.otobeyan-message{max-width:92%;padding:9px 11px;border-radius:11px;font-size:13px;line-height:1.45;white-space:pre-wrap}.otobeyan-message.bot{align-self:flex-start;background:#fff;border:1px solid #e2e8f0;color:#334155}.otobeyan-message.user{align-self:flex-end;background:#dbeafe;color:#1e3a8a}.otobeyan-message.error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.otobeyan-message.success{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.otobeyan-message strong{font-weight:800}
-    .otobeyan-compose{border-top:1px solid #e2e8f0;padding:10px;background:#fff}.otobeyan-input-row{display:grid;grid-template-columns:auto 1fr auto;gap:7px}.otobeyan-input-row button,.otobeyan-input-row input{border:1px solid #cbd5e1;border-radius:9px;font:inherit}.otobeyan-input-row input{min-width:0;padding:10px}.otobeyan-input-row button{padding:8px 10px;background:#fff;cursor:pointer}.otobeyan-input-row button:last-child{background:#2563eb;border-color:#2563eb;color:#fff;font-weight:700}.otobeyan-input-row button:disabled{opacity:.55;cursor:wait}.otobeyan-hint{font-size:10px;color:#64748b;margin-top:7px}.otobeyan-card{margin-top:7px;padding-top:7px;border-top:1px solid #e2e8f0}.otobeyan-card>div{display:flex;justify-content:space-between;gap:10px;margin-top:3px}.otobeyan-card span:first-child{color:#64748b}.otobeyan-pill{display:inline-block;margin-top:7px;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:11px;font-weight:800}
+    #otobeyanOverlay{position:fixed;inset:0;z-index:2300;display:none;place-items:center;padding:22px;background:#0f172a99;backdrop-filter:blur(2px)}
+    #otobeyanOverlay.open{display:grid}#otobeyanPanel{width:min(980px,calc(100vw - 28px));height:min(760px,calc(100vh - 28px));display:grid;grid-template-rows:auto 1fr;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 22px 70px #0f172a66;overflow:hidden}
+    .otobeyan-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;background:#172554;color:#fff}.otobeyan-title{font-size:17px;font-weight:800}.otobeyan-sub{font-size:11px;color:#c7d2fe;margin-top:2px}.otobeyan-actions{display:flex;gap:6px}.otobeyan-head button{border:1px solid #ffffff40;background:#ffffff16;color:#fff;border-radius:7px;padding:6px 8px;cursor:pointer}
+    #otobeyanMessages{padding:18px;overflow:auto;background:#f8fafc;display:flex;flex-direction:column;gap:10px}.otobeyan-message{width:100%;padding:11px 13px;border-radius:11px;font-size:13px;line-height:1.45;white-space:pre-wrap;background:#fff;border:1px solid #e2e8f0;color:#334155}.otobeyan-message.error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.otobeyan-message.success{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.otobeyan-message strong{font-weight:800}
+    .otobeyan-quick-btn{margin-top:5px;border:1px solid #2563eb;border-radius:7px;background:#eff6ff;color:#1d4ed8;padding:6px 9px;font:800 11px/1.1 inherit;cursor:pointer;white-space:nowrap}.otobeyan-quick-btn:hover{background:#dbeafe}.otobeyan-quick-btn:disabled{opacity:.55;cursor:wait}.otobeyan-card{margin-top:7px;padding-top:7px;border-top:1px solid #e2e8f0}.otobeyan-card>div{display:flex;justify-content:space-between;gap:10px;margin-top:3px}.otobeyan-card span:first-child{color:#64748b}.otobeyan-pill{display:inline-block;margin-top:7px;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:11px;font-weight:800}
     .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:8px;margin-top:9px}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:10px;padding:9px;background:#f8fafc}.otobeyan-crew-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px;font-weight:800}.otobeyan-crew-head button{border:0;background:#fee2e2;color:#991b1b;border-radius:6px;padding:4px 7px;cursor:pointer}.otobeyan-crew-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.otobeyan-crew-field{display:flex;flex-direction:column;gap:3px}.otobeyan-crew-field.full{grid-column:1/-1}.otobeyan-crew-field label{font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:800}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:7px;background:#fff;padding:7px;font:inherit;color:#0f172a}.otobeyan-source-arrow{font-size:10px;color:#64748b;margin-top:4px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#334155;padding:8px 10px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.otobeyan-review label{display:flex;flex-direction:column;gap:3px;font-size:9px;text-transform:uppercase;color:#64748b;font-weight:800}
-    @media(max-width:520px){#otobeyanLauncher{right:12px;bottom:12px}#otobeyanPanel{right:12px;bottom:66px}}
+    @media(max-width:520px){#otobeyanOverlay{padding:8px}#otobeyanPanel{width:100%;height:100%;border-radius:10px}.otobeyan-review,.otobeyan-crew-grid{grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 }
@@ -124,48 +124,122 @@ function installUi() {
   if (document.getElementById('otobeyanPanel')) return;
   installStyles();
   document.body.insertAdjacentHTML('beforeend', `
-    <button id="otobeyanLauncher" type="button">✈ OtoBeyan</button>
-    <section id="otobeyanPanel" aria-label="OtoBeyan yardımcısı">
+    <div id="otobeyanOverlay" aria-hidden="true">
+    <section id="otobeyanPanel" role="dialog" aria-modal="true" aria-label="Hızlı Beyan">
       <header class="otobeyan-head">
-        <div><div class="otobeyan-title">OtoBeyan</div><div class="otobeyan-sub" id="otobeyanStatus">Chrome köprüsü kontrol ediliyor…</div></div>
-        <div class="otobeyan-actions"><button id="otobeyanMailLogin" type="button">Mail</button><button id="otobeyanIgoLogin" type="button">iGO</button><button id="otobeyanClose" type="button">✕</button></div>
+        <div><div class="otobeyan-title" id="otobeyanTitle">Hızlı Beyan</div><div class="otobeyan-sub" id="otobeyanStatus">OtoBeyan Worker kontrol ediliyor…</div></div>
+        <div class="otobeyan-actions"><button id="otobeyanIgoLogin" type="button">iGO Oturumu</button><button id="otobeyanClose" type="button">✕</button></div>
       </header>
       <div id="otobeyanMessages"></div>
-      <div class="otobeyan-compose">
-        <div class="otobeyan-input-row">
-          <button id="otobeyanAttach" type="button" title="GenDec PDF yükle">📎</button>
-          <input id="otobeyanInput" placeholder="XQ254 veya XQ254 13.09.2026" autocomplete="off">
-          <button id="otobeyanSend" type="button">Gönder</button>
-        </div>
-        <div class="otobeyan-hint">PDF yüklersen ekip parserı; sefer yazarsan Excel tarihi + iGO Load Sheet kullanılır.</div>
-        <input id="otobeyanFile" type="file" accept="application/pdf,.pdf" hidden>
-      </div>
-    </section>`);
+    </section></div>`);
 
-  document.getElementById('otobeyanLauncher').addEventListener('click', togglePanel);
-  document.getElementById('otobeyanClose').addEventListener('click', togglePanel);
-  document.getElementById('otobeyanSend').addEventListener('click', submitText);
-  document.getElementById('otobeyanInput').addEventListener('keydown', event => {
-    if (event.key === 'Enter') submitText();
+  document.getElementById('otobeyanClose').addEventListener('click', closePanel);
+  document.getElementById('otobeyanOverlay').addEventListener('click', event => {
+    if (event.target.id === 'otobeyanOverlay' && !state.busy) closePanel();
   });
-  document.getElementById('otobeyanAttach').addEventListener('click', () => document.getElementById('otobeyanFile').click());
-  document.getElementById('otobeyanFile').addEventListener('change', handlePdf);
   document.getElementById('otobeyanIgoLogin').addEventListener('click', openIgoLogin);
-  document.getElementById('otobeyanMailLogin').addEventListener('click', openMailLogin);
-  addMessage('Sefer numarası yazabilir veya SunExpress GenDec PDF yükleyebilirsin. Önce Excel yüklüyse tarihi otomatik bulurum.', 'bot');
-  syncVisibility();
   checkIgoConnectivity();
+  globalThis.OtoBeyanApi?.recentMail?.().catch(() => {
+    // Sessiz ön ısıtma: gerçek hata kullanıcı Hızlı Beyan başlattığında gösterilir.
+  });
+  installQuickButtons();
 }
 
-function syncVisibility() {
-  const launcher = document.getElementById('otobeyanLauncher');
-  if (launcher) launcher.style.display = '';
+function openPanel() {
+  const overlay = document.getElementById('otobeyanOverlay');
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
 }
 
-function togglePanel() {
-  const panel = document.getElementById('otobeyanPanel');
-  panel.classList.toggle('open');
-  if (panel.classList.contains('open')) document.getElementById('otobeyanInput').focus();
+function closePanel() {
+  const overlay = document.getElementById('otobeyanOverlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function isQuickBeyanEligible(row, actionCell) {
+  const flightNumber = normalizeFlightNumber(row?.flightNo);
+  const isSunExpress = flightNumber.startsWith('XQ');
+  const isDeparture = String(row?.type || '').toLocaleUpperCase('tr-TR').includes('GİDİŞ');
+  const hasOpenAction = Boolean(actionCell?.querySelector('button[onclick*="openModal("]'));
+  return isSunExpress && isDeparture && hasOpenAction;
+}
+
+async function startQuickBeyan(rowIndex, triggerButton) {
+  if (state.busy) return;
+  const appState = getMainState();
+  const row = Array.isArray(appState?.rows) ? appState.rows[rowIndex] : null;
+  if (!row) return;
+
+  const context = {
+    flightNumber: normalizeFlightNumber(row.flightNo),
+    flightDate: normalizeDate(row.flightDate),
+    tailNumber: row.reg || '',
+    departurePortCode: row.departureAirport || '',
+    arrivalPortCode: row.arrivalAirport || '',
+    scheduledTime: row.time || '',
+    rowIndex,
+    row
+  };
+  if (!context.flightNumber || !context.flightDate) {
+    alert('Hızlı Beyan için sefer numarası veya Excel tarihi eksik.');
+    return;
+  }
+
+  state.lastContext = context;
+  state.crews = [];
+  state.igoResult = null;
+  state.declaration = null;
+  clearActionPanel();
+  const messages = document.getElementById('otobeyanMessages');
+  if (messages) messages.innerHTML = '';
+  const title = document.getElementById('otobeyanTitle');
+  if (title) title.textContent = `Hızlı Beyan · ${context.flightNumber}`;
+  openPanel();
+  if (triggerButton) triggerButton.disabled = true;
+
+  try {
+    addMessage('Load Sheet ve son 6 saatteki GenDec aynı anda hazırlanıyor…', 'bot');
+    const mailPromise = searchCrewMail(context);
+    await runIgoQuery(context);
+    await mailPromise;
+    renderActionPanel();
+  } finally {
+    if (triggerButton?.isConnected) triggerButton.disabled = false;
+  }
+}
+
+function addQuickButtons() {
+  const appState = getMainState();
+  const rows = Array.isArray(appState?.rows) ? appState.rows : [];
+  rows.forEach((row, rowIndex) => {
+    const actionCell = document.getElementById(`action-${rowIndex}`);
+    if (!actionCell || actionCell.querySelector('[data-otobeyan-quick]')) return;
+    if (!isQuickBeyanEligible(row, actionCell)) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'otobeyan-quick-btn';
+    button.dataset.otobeyanQuick = String(rowIndex);
+    button.textContent = '⚡ Hızlı Beyan';
+    button.addEventListener('click', () => startQuickBeyan(rowIndex, button));
+    actionCell.appendChild(button);
+  });
+}
+
+function installQuickButtons() {
+  const tableBody = document.getElementById('tableBody');
+  if (!tableBody) return;
+  let queued = false;
+  const queueInstall = () => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      addQuickButtons();
+    });
+  };
+  new MutationObserver(queueInstall).observe(tableBody, { childList: true, subtree: true });
+  queueInstall();
 }
 
 function addMessage(content, type = 'bot', html = false) {
@@ -181,8 +255,10 @@ function addMessage(content, type = 'bot', html = false) {
 
 function setBusy(busy) {
   state.busy = busy;
-  document.getElementById('otobeyanSend').disabled = busy;
-  document.getElementById('otobeyanAttach').disabled = busy;
+  const send = document.getElementById('otobeyanSend');
+  const attach = document.getElementById('otobeyanAttach');
+  if (send) send.disabled = busy;
+  if (attach) attach.disabled = busy;
 }
 
 async function checkIgoConnectivity() {
@@ -199,7 +275,16 @@ async function checkIgoConnectivity() {
   } catch {
     state.extensionAvailable = false;
   }
-  status.textContent = 'Yerel dosya modu · iGO için Chrome köprüsü gerekli';
+  try {
+    const health = await globalThis.OtoBeyanApi?.health?.();
+    if (health?.browserBinding && health?.sessionStoreBinding) {
+      status.textContent = health.sessionCached
+        ? 'OtoBeyan Worker · iGO oturumu hazır'
+        : 'OtoBeyan Worker hazır · ilk sorguda iGO girişi gerekir';
+      return;
+    }
+  } catch (_) {}
+  status.textContent = 'OtoBeyan Worker bağlantısı kurulamadı';
 }
 
 async function openIgoLogin() {
@@ -216,8 +301,7 @@ async function openIgoLogin() {
       return;
     }
   }
-  window.open('https://igo.sunexpress.com/WB/pgWBFlightList.aspx', '_blank', 'noopener');
-  addMessage('iGO sayfasını açtım. Canlı sorgu için OtoBeyan Chrome köprüsünün kurulu ve dosya erişiminin açık olması gerekir.', 'bot');
+  addMessage('iGO girişi gerekiyorsa ilk Load Sheet sorgusunda güvenli Live View bağlantısı açılacak. Oturum Worker’da saklandığı için sonraki sorgularda tekrar CAPTCHA istenmez.', 'bot');
 }
 
 function openMailLogin() {
@@ -296,6 +380,31 @@ async function fetchCrewFromConnectedMail(context) {
 }
 
 async function searchCrewMail(context) {
+  if (globalThis.OtoBeyanApi?.flightPdf && typeof globalThis.parseCrewPdfFileData === 'function') {
+    addMessage(`${context.flightNumber} için son 6 saatin merkezi GenDec cache’i aranıyor…`, 'bot');
+    try {
+      const pdf = await globalThis.OtoBeyanApi.flightPdf(context.flightNumber);
+      const file = new File([pdf.blob], pdf.fileName || `${context.flightNumber}.pdf`, {
+        type: pdf.blob.type || 'application/pdf',
+        lastModified: Date.now()
+      });
+      const parsed = await globalThis.parseCrewPdfFileData(file, {
+        flightNo: context.flightNumber,
+        tailNumber: context.tailNumber || '',
+        departurePortCode: context.departurePortCode || '',
+        arrivalPortCode: context.arrivalPortCode || ''
+      });
+      if (!Array.isArray(parsed.crews) || !parsed.crews.length) {
+        throw new Error('GenDec PDF bulundu fakat ekip listesi ayrıştırılamadı.');
+      }
+      renderCrewEditor(parsed.crews, `Mail GenDec · ${pdf.fileName}`);
+      return parsed.crews;
+    } catch (error) {
+      addMessage(`Merkezi GenDec alınamadı: ${error.message}`, 'error');
+      return null;
+    }
+  }
+
   if (!globalThis.BeyanMail?.isConnected?.()) {
     const message = addMessage('Ekip PDF araması için mail bağlantısı kapalı.', 'bot');
     const actions = document.createElement('div');
@@ -454,7 +563,44 @@ async function runIgoQuery(context) {
     }
     return;
   }
-  addMessage(`${context.flightNumber} / ${context.flightDate} hazır. iGO sorgusu için Chrome köprüsü algılanmadı; PDF ve mail ekip işlemleri sunucusuz devam eder.`, 'error');
+  if (globalThis.OtoBeyanApi?.queryIgo) {
+    addMessage(`${context.flightNumber} / ${context.flightDate} iGO’da OtoBeyan Worker ile aranıyor…`, 'bot');
+    let liveViewWindow = null;
+    try {
+      const result = await globalThis.OtoBeyanApi.queryIgo({
+        flightNumber: context.flightNumber,
+        flightDate: context.flightDate
+      }, event => {
+        if (event.type === 'captcha' && event.liveViewUrl) {
+          const message = addMessage('iGO oturumu için CAPTCHA onayı gerekiyor.', 'bot');
+          const link = document.createElement('a');
+          link.href = event.liveViewUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = 'CAPTCHA ekranını aç';
+          link.className = 'otobeyan-btn primary';
+          link.addEventListener('click', clickEvent => {
+            clickEvent.preventDefault();
+            liveViewWindow = window.open(event.liveViewUrl, 'otobeyanIgoLogin');
+          });
+          const actions = document.createElement('div');
+          actions.className = 'otobeyan-inline-actions';
+          actions.appendChild(link);
+          message.appendChild(actions);
+        }
+      });
+      renderIgoResult(result);
+      try { liveViewWindow?.close?.(); } catch (_) {}
+      window.focus();
+    } catch (error) {
+      addMessage(error.message, 'error');
+    } finally {
+      setBusy(false);
+      checkIgoConnectivity();
+    }
+    return;
+  }
+  addMessage('OtoBeyan Worker istemcisi yüklenmedi. Sayfayı yenileyip tekrar dene.', 'error');
   setBusy(false);
 }
 
@@ -462,7 +608,7 @@ function renderIgoResult(result) {
   state.igoResult = result;
   const flight = result.flight;
   const sheet = result.loadSheet;
-  const field = name => sheet.fields?.[name]?.value ?? '—';
+  const field = name => sheet.fields?.[name]?.value ?? sheet[name] ?? '—';
   const finalized = sheet.finalized;
   const message = `
     <strong>${escapeHtml(flight.flightNumber)} · ${escapeHtml(flight.flightDate)}</strong>

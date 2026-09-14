@@ -3,17 +3,44 @@
 OtoBeyan tamamen `otobeyan/` klasöründe tutulur. Ana uygulamadaki tek bağlantı:
 
 ```html
-<script src="./otobeyan/chatbox.js"></script>
+<script src="./otobeyan/loader.js"></script>
 ```
 
 Bu satır kaldırılır veya yorumlanırsa özellik kullanıcıdan tamamen gizlenir.
+
+## Hedef klasör yapısı
+
+```text
+otobeyan/
+├── quickbeyan.js                 # uçuş satırındaki Hızlı Beyan düğmesi + modal
+├── config.js                     # Worker adresi ve geçici erişim kodu
+├── loader.js                     # index.html içindeki tek OtoBeyan bağlantısı
+├── client/                       # tarayıcı tarafı yardımcı modüller
+│   ├── api.js
+│   ├── gendec-parser.js           # planlanan bağımsız parser modülü
+│   └── cache.js                   # planlanan parse edilmiş ekip cache'i
+├── cloudflare-worker/            # tek OtoBeyan Worker projesi
+│   ├── src/
+│   │   ├── worker.js             # ana router + iGO
+│   │   └── mail.js               # EWS / SXS\GenDec
+│   ├── package.json
+│   └── wrangler.jsonc
+└── README.md
+```
+
+Geçiş sırasında `chrome-extension/` yalnız geri dönüş seçeneği olarak korunur.
+Worker tabanlı Hızlı Beyan akışı doğrulandıktan sonra kaldırılır. Ana dizindeki eski `cloudflare-ews-probe/`
+kaynağı mail modülü olarak `cloudflare-worker/src/mail.js` altına taşınmıştır.
 
 ## Çalışma biçimi
 
 - `index.html` doğrudan `file://` olarak açılır.
 - Node, npm, pnpm veya yerel sunucu kullanılmaz.
 - GenDec PDF mevcut parser ile okunur.
-- Mail bağlantısı açıksa sefer ve tarihe göre ekip PDF otomatik aranır.
+- Merkezi posta kutusunda yalnız son altı saatteki mesajlar değerlendirilir.
+- GenDec eşleştirmesinde tek iş anahtarı normalize edilmiş sefer numarasıdır.
+- Tarih ve kuyruk mail filtresi değildir; bulunan PDF'in içeriği ve Excel uçuşu
+  sonradan çapraz doğrulanır.
 - iGO uçuş ve Load Sheet sorgusu Chrome köprüsüyle, mevcut iGO oturumu üzerinden yalnız okunur.
 - PAX + INFANT ve OffBlock Fuel kullanıcıya gösterilir; Load Sheet'te `Digitally Signed` yoksa uyarı verilir.
 - Ekip ve HGBS crew type alanları kullanıcı tarafından düzeltilebilir.
@@ -40,9 +67,10 @@ Arama sefer numarası + Excel tarihi ile yapılır. Sonuç, mümkün olduğunda 
 - `Digitally Signed` yoksa veri hazırlanır fakat kullanıcıya finalize uyarısı gösterilir.
 - Load Sheet crew sayısı beyan kaynağı değildir; ekip GenDec tablosundan gelir.
 
-## Cloudflare Worker testi
+## Tek Cloudflare Worker
 
-Cloudflare dashboard editörü npm paketlerini tek dosyadan bundle etmediği için
-Browser Run testi bağımsız proje olarak `otobeyan/cloudflare-worker/` altında
-tutulur. Kurulum adımları için `otobeyan/cloudflare-worker/README.md` dosyasına
-bakın. Yerel `npm`, Wrangler kurulumu veya test yapılmamıştır.
+iGO ve TGS mail erişimi aynı `otobeyan/cloudflare-worker/` projesindedir. Tek
+Worker kullanılması tek kod tabanı ve tek istemci adresi anlamına gelir; iGO
+Browser Rendering oturumu ile EWS istekleri yine ayrı modüllerde kalır. Kurulum
+adımları için `otobeyan/cloudflare-worker/README.md` dosyasına bakın. Yerel npm,
+Wrangler kurulumu veya deploy işlemi yapılmaz.

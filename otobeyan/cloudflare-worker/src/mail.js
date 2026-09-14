@@ -1,8 +1,8 @@
 /*
- * TGS Exchange ActiveSync -> browser JSON API
- * Version: v1.5.5b
- * Username and password arrive from the browser for each request.
- * They are not stored by the Worker. Add Cloudflare Access / a real login before public use.
+ * OtoBeyan TGS Exchange ActiveSync mail module
+ * Version: v2.0.0
+ * Production credentials come from EWS_USERNAME / EWS_PASSWORD Worker secrets.
+ * Credentials never leave Worker secrets.
  */
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -11,57 +11,8 @@ const DEVICE_TYPE = 'BeyanWeb';
 const TARGET_FOLDER_PATH = ['SXS', 'GenDec'];
 const WINDOW_SIZE = 100;
 const MAX_SYNC_PAGES = 5;
-
-const CLIENT_HTML = `<!doctype html>
-<html lang="tr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SXS GenDec Mail Testi</title>
-  <style>
-    *{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#172033;font:14px system-ui,-apple-system,Segoe UI,sans-serif}
-    main{max-width:980px;margin:30px auto;padding:0 16px}.card{background:#fff;border:1px solid #dbe3ef;border-radius:14px;box-shadow:0 5px 20px #0f172a12;padding:20px}
-    h1{margin:0 0 6px;font-size:24px}p{color:#64748b;margin:0 0 16px}.login{display:flex;gap:8px;flex-wrap:wrap}
-    input,button{font:inherit;border-radius:8px;padding:10px 12px}input{border:1px solid #cbd5e1;flex:1;min-width:220px}button{border:0;background:#166534;color:#fff;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}
-    #search{display:none;margin-top:10px;width:100%}#status{padding:12px 0;color:#475569}.mail{border-top:1px solid #e2e8f0;padding:14px 0}.mail h3{margin:0 0 4px;font-size:15px}.meta{font-size:12px;color:#64748b}.body{margin-top:8px;white-space:pre-wrap;max-height:90px;overflow:hidden;color:#475569}
-    .attachments{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap}.attachment{background:#e8f1ff;color:#174ea6;border:1px solid #bfd3f7;padding:7px 9px;font-weight:600}.empty{padding:24px;text-align:center;color:#64748b}
-  </style>
-</head>
-<body><main><section class="card">
-  <h1>SXS / GenDec Mail Testi</h1>
-  <p>Kullanıcı adı ve parola saklanmaz. Bu sayfa yalnızca <b>SXS\\GenDec</b> klasörünü okur.</p>
-  <div class="login"><input id="username" autocomplete="username" placeholder="TGS kullanıcı adı (ör. ma056814)"><input id="password" type="password" autocomplete="current-password" placeholder="Exchange mail parolası"><button id="load">Mailleri Getir</button></div>
-  <input id="search" type="search" placeholder="Konu, gönderen veya PDF adı ara">
-  <div id="status"></div><div id="messages"></div>
-</section></main>
-<script>
-  var state={messages:[]};
-  function el(id){return document.getElementById(id)}
-  function clean(value){return String(value||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-  function username(){return el('username').value.trim()}
-  function password(){return el('password').value}
-  function headers(){return {'X-Exchange-User':username(),'X-Exchange-Password':password()}}
-  function render(){
-    var q=el('search').value.toLocaleLowerCase('tr-TR');
-    var list=state.messages.filter(function(m){return !q||(String(m.subject)+' '+String(m.from)+' '+(m.attachments||[]).map(function(a){return a.name}).join(' ')).toLocaleLowerCase('tr-TR').includes(q)});
-    el('messages').innerHTML=list.map(function(m){
-      var files=(m.attachments||[]).map(function(a){return '<button class="attachment" data-id="'+encodeURIComponent(a.id)+'" data-name="'+encodeURIComponent(a.name)+'">📎 '+clean(a.name)+'</button>'}).join('');
-      return '<article class="mail"><h3>'+clean(m.subject||'(Konu yok)')+'</h3><div class="meta">'+clean(m.from)+' · '+clean(m.date)+'</div>'+(m.body?'<div class="body">'+clean(m.body)+'</div>':'')+'<div class="attachments">'+files+'</div></article>';
-    }).join('')||'<div class="empty">Uyan mail bulunamadı.</div>';
-  }
-  el('search').addEventListener('input',render);
-  el('load').addEventListener('click',async function(){
-    if(!username()){el('status').textContent='TGS kullanıcı adını gir.';return}
-    if(!password()){el('status').textContent='Parolayı gir.';return}
-    var button=el('load');button.disabled=true;el('status').textContent='SXS / GenDec okunuyor...';el('messages').innerHTML='';
-    try{var r=await fetch('/api/messages',{headers:headers(),cache:'no-store'});var data=await r.json();if(!r.ok)throw new Error(data.error||('HTTP '+r.status));state.messages=data.messages||[];el('search').style.display='block';el('status').textContent=(data.folder||'SXS\\GenDec')+': '+state.messages.length+' mail bulundu.'+(data.moreAvailable?' İlk '+data.limit+' kayıt gösteriliyor; daha fazlası var.':'');render()}catch(e){el('status').textContent='Hata: '+e.message}finally{button.disabled=false}
-  });
-  el('messages').addEventListener('click',async function(event){
-    var button=event.target.closest('.attachment');if(!button)return;button.disabled=true;
-    var name=decodeURIComponent(button.dataset.name),id=button.dataset.id;
-    try{var r=await fetch('/api/attachment?id='+id+'&name='+encodeURIComponent(name),{headers:headers(),cache:'no-store'});if(!r.ok){var data=await r.json().catch(function(){return {}});throw new Error(data.error||('HTTP '+r.status))}var blob=await r.blob();var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(function(){URL.revokeObjectURL(a.href)},1000)}catch(e){alert('Ek indirilemedi: '+e.message)}finally{button.disabled=false}
-  });
-</script></body></html>`;
+const DEFAULT_LOOKBACK_HOURS = 6;
+const MAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const TAGS = {
   0: { 5:'Sync',6:'Responses',7:'Add',8:'Change',9:'Delete',10:'Fetch',11:'SyncKey',12:'ClientId',13:'ServerId',14:'Status',15:'Collection',16:'Class',18:'CollectionId',19:'GetChanges',20:'MoreAvailable',21:'WindowSize',22:'Commands',23:'Options',24:'FilterType',28:'Collections',29:'ApplicationData',30:'DeletesAsMoves',34:'MIMESupport',35:'MIMETruncation',40:'MaxItems' },
@@ -299,43 +250,58 @@ function searchKey(value) {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
 }
-function flightDateKeys(isoDate) {
-  const match = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) throw new Error('Ucus tarihi YYYY-MM-DD formatinda olmali.');
-  const [, year, month, day] = match;
-  const monthName = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(month) - 1];
-  if (!monthName) throw new Error('Ucus tarihi gecersiz.');
-  return [`${year}${month}${day}`, `${day}${month}${year}`, `${day}${monthName}${year}`, `${day}${monthName}`];
+function lookbackHours(url) {
+  return DEFAULT_LOOKBACK_HOURS;
 }
-function findFlightPdf(messages, flightNo, isoDate) {
+
+function recentMessages(messages, hours = DEFAULT_LOOKBACK_HOURS, now = Date.now()) {
+  const cutoff = now - hours * 60 * 60 * 1000;
+  return (messages || []).filter(message => {
+    const receivedAt = Date.parse(message.date || '');
+    return Number.isFinite(receivedAt) && receivedAt >= cutoff && receivedAt <= now + 5 * 60 * 1000;
+  });
+}
+
+function compactMessage(message) {
+  return {
+    id: String(message.id || ''),
+    subject: String(message.subject || '').slice(0, 1000),
+    from: String(message.from || '').slice(0, 500),
+    to: String(message.to || '').slice(0, 500),
+    date: String(message.date || ''),
+    read: Boolean(message.read),
+    body: String(message.body || '').slice(0, 4000),
+    attachments: (message.attachments || []).map(attachment => ({
+      id: String(attachment.id || ''),
+      name: String(attachment.name || '').slice(0, 500),
+      contentType: String(attachment.contentType || '').slice(0, 200),
+      size: Number(attachment.size || 0),
+      inline: Boolean(attachment.inline)
+    }))
+  };
+}
+
+function findFlightPdf(messages, flightNo) {
   const flightKey = searchKey(flightNo);
   if (!flightKey) throw new Error('Ucus numarasi eksik.');
-  const dateKeys = flightDateKeys(isoDate);
+  if (!/^XQ\d{1,5}[A-Z]?$/.test(flightKey)) throw new Error('Ucus numarasi XQ254 biciminde olmali.');
+  const flightPattern = new RegExp(`${flightKey}(?!\\d)`);
   const candidates = [];
 
   for (const message of messages) {
     const subjectKey = searchKey(message.subject);
     const bodyKey = searchKey(message.body);
-    const mailDateMatch = String(message.date || '').slice(0, 10) === isoDate;
 
     for (const attachment of message.attachments || []) {
       if (!String(attachment.name || '').toLowerCase().endsWith('.pdf')) continue;
       const nameKey = searchKey(attachment.name);
-      const flightMatch = nameKey.includes(flightKey) || subjectKey.includes(flightKey) || bodyKey.includes(flightKey);
-      const attachmentDateMatch = dateKeys.some(key => nameKey.includes(key));
-      const subjectDateMatch = dateKeys.some(key => subjectKey.includes(key));
-      const bodyDateMatch = dateKeys.some(key => bodyKey.includes(key));
-      const dateMatch = attachmentDateMatch || subjectDateMatch || bodyDateMatch || mailDateMatch;
-      if (!flightMatch || !dateMatch) continue;
+      const flightMatch = flightPattern.test(nameKey) || flightPattern.test(subjectKey) || flightPattern.test(bodyKey);
+      if (!flightMatch) continue;
 
       let score = 0;
       if (nameKey.includes(flightKey)) score += 50;
-      if (attachmentDateMatch) score += 50;
       if (subjectKey.includes(flightKey)) score += 30;
-      if (subjectDateMatch) score += 30;
       if (bodyKey.includes(flightKey)) score += 15;
-      if (bodyDateMatch) score += 15;
-      if (mailDateMatch) score += 5;
       if (nameKey.includes('GENDEC')) score += 10;
       candidates.push({ message, attachment, score });
     }
@@ -359,51 +325,106 @@ function fileResponse(bytes, name, extraHeaders = {}) {
 }
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Exchange-User, X-Exchange-Password',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
   'Cache-Control': 'no-store'
 };
 function json(data, status = 200) { return Response.json(data, { status, headers: cors }); }
 
+function snapshotFrom(result, hours) {
+  const cachedAt = new Date().toISOString();
+  return {
+    cacheVersion: 1,
+    folder: TARGET_FOLDER_PATH.join('\\'),
+    messages: recentMessages(result.messages, hours).map(compactMessage),
+    lookbackHours: hours,
+    fetchedMessages: result.messages.length,
+    syncKey: result.syncKey,
+    pages: result.pages,
+    moreAvailable: result.moreAvailable,
+    limit: result.limit,
+    cachedAt,
+    expiresAt: new Date(Date.now() + MAIL_CACHE_TTL_MS).toISOString()
+  };
+}
+
+function snapshotIsFresh(snapshot) {
+  return Boolean(snapshot?.cachedAt)
+    && Date.now() - Date.parse(snapshot.cachedAt) < MAIL_CACHE_TTL_MS;
+}
+
+export async function refreshMailCache(env, cache, hours = DEFAULT_LOOKBACK_HOURS) {
+  const alias = userAlias(env.EWS_USERNAME);
+  if (!env.EWS_PASSWORD) throw new Error('EWS_PASSWORD secret eksik.');
+  const result = await loadMessages(alias, env.EWS_PASSWORD);
+  const snapshot = snapshotFrom(result, hours);
+  if (cache?.saveMailSnapshot) await cache.saveMailSnapshot(snapshot);
+  return snapshot;
+}
+
+async function getMailSnapshot(env, cache, hours, force = false) {
+  if (!force && cache?.getMailSnapshot) {
+    const stored = await cache.getMailSnapshot();
+    if (snapshotIsFresh(stored)) {
+      return {
+        ...stored,
+        messages: recentMessages(stored.messages, hours),
+        lookbackHours: hours,
+        fromCache: true
+      };
+    }
+  }
+
+  const snapshot = await refreshMailCache(env, cache, hours);
+  return { ...snapshot, fromCache: false };
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, services = {}) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(request.url);
-    const enteredUser = request.headers.get('X-Exchange-User');
-    const password = request.headers.get('X-Exchange-Password');
+    const route = url.pathname.replace(/^\/api\/mail(?=\/|$)/, '/api');
     try {
-      if (url.pathname === '/' || url.pathname === '/index.html') {
-        return new Response(CLIENT_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+      if (route === '/api/health') return json({
+        ok: true,
+        version: 'v2.0.0',
+        protocol: 'Exchange ActiveSync 14.1',
+        folder: TARGET_FOLDER_PATH.join('\\'),
+        lookbackHours: DEFAULT_LOOKBACK_HOURS,
+        credentialsConfigured: Boolean(env.EWS_USERNAME && env.EWS_PASSWORD)
+      });
+      if (!env.EWS_USERNAME || !env.EWS_PASSWORD || !env.TEST_API_KEY) {
+        return json({ error: 'EWS_USERNAME, EWS_PASSWORD veya TEST_API_KEY secret eksik.' }, 503);
       }
-      if (url.pathname === '/api/health') return json({ ok: true, version: 'v1.5.5b', protocol: 'Exchange ActiveSync 14.1', login: `${DOMAIN}\\kullanici`, folder: TARGET_FOLDER_PATH.join('\\') });
-      const alias = userAlias(enteredUser);
-      if (!password) return json({ error: 'Mail parolasini gir.' }, 401);
-      if (url.pathname === '/api/login') {
+      if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
+        return json({ error: 'Erisim anahtari gecersiz.' }, 401);
+      }
+      const alias = userAlias(env.EWS_USERNAME);
+      const password = env.EWS_PASSWORD;
+      if (route === '/api/login') {
         await targetFolder(alias, password);
         return json({ ok: true, user: alias, folder: TARGET_FOLDER_PATH.join('\\') });
       }
-      if (url.pathname === '/api/messages') {
-        const result = await loadMessages(alias, password);
-        return json({
-          folder: TARGET_FOLDER_PATH.join('\\'),
-          messages: result.messages,
-          syncKey: result.syncKey,
-          pages: result.pages,
-          moreAvailable: result.moreAvailable,
-          limit: result.limit
-        });
+      if (route === '/api/messages') {
+        const hours = lookbackHours(url);
+        const snapshot = await getMailSnapshot(env, services.mailCache, hours, url.searchParams.get('refresh') === '1');
+        return json(snapshot);
       }
-      if (url.pathname === '/api/flight-pdf') {
+      if (route === '/api/flight-pdf') {
         const flightNo = url.searchParams.get('flightNo');
-        const flightDate = url.searchParams.get('date');
-        const result = await loadMessages(alias, password);
-        const match = findFlightPdf(result.messages, flightNo, flightDate);
+        const hours = lookbackHours(url);
+        let snapshot = await getMailSnapshot(env, services.mailCache, hours);
+        let match = findFlightPdf(snapshot.messages, flightNo);
+        if (!match && snapshot.fromCache) {
+          snapshot = await getMailSnapshot(env, services.mailCache, hours, true);
+          match = findFlightPdf(snapshot.messages, flightNo);
+        }
         if (!match) {
           return json({
-            error: `${flightDate} tarihli ${flightNo} ucusu icin PDF eki bulunamadi.`,
-            searchedMessages: result.messages.length,
-            moreAvailable: result.moreAvailable
+            error: `Son ${hours} saatte ${flightNo} ucusu icin PDF eki bulunamadi.`,
+            searchedMessages: snapshot.messages.length,
+            moreAvailable: snapshot.moreAvailable
           }, 404);
         }
         const bytes = await fetchAttachment(alias, password, match.attachment.id);
@@ -411,12 +432,22 @@ export default {
           'X-Mail-Subject': encodeURIComponent(String(match.message.subject || ''))
         });
       }
-      if (url.pathname === '/api/attachment') {
+      if (route === '/api/attachment') {
         const attachmentId = url.searchParams.get('id');
         const name = url.searchParams.get('name') || 'attachment';
         if (!attachmentId) return json({ error: 'id eksik.' }, 400);
         const fileBytes = await fetchAttachment(alias, password, attachmentId);
         return fileResponse(fileBytes, name);
+      }
+      if (route === '/api/sync' && request.method === 'POST') {
+        const snapshot = await getMailSnapshot(env, services.mailCache, DEFAULT_LOOKBACK_HOURS, true);
+        return json({
+          ok: true,
+          cachedAt: snapshot.cachedAt,
+          expiresAt: snapshot.expiresAt,
+          messageCount: snapshot.messages.length,
+          lookbackHours: snapshot.lookbackHours
+        });
       }
       return json({ error: 'Not found' }, 404);
     } catch (error) { return json({ error: error instanceof Error ? error.message : String(error) }, 502); }

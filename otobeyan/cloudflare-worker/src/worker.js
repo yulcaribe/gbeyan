@@ -1,17 +1,26 @@
 // OtoBeyan iGO Browser Run
 // Bu dosya Cloudflare Workers Builds tarafından package.json ile bundle edilir.
 // Browser binding adı: BROWSER
-// Gerekli Worker Secret'ları: IGO_USERNAME, IGO_PASSWORD, TEST_API_KEY
+// Gerekli Worker Secret'ları:
+// IGO_USERNAME, IGO_PASSWORD, EWS_USERNAME, EWS_PASSWORD, TEST_API_KEY
 // CAPTCHA otomatik çözülmez. Yalnız kayıtlı iGO oturumu yoksa/sona erdiyse
 // kullanıcı Live View ekranında kendisi tamamlar.
 
 import { launch } from '@cloudflare/playwright';
 import { DurableObject } from 'cloudflare:workers';
+import mailWorker, { refreshMailCache } from './mail.js';
 
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
+const API_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff'
+};
 
 export class IgoSessionStore extends DurableObject {
   async getSession() {
@@ -32,6 +41,20 @@ export class IgoSessionStore extends DurableObject {
     return { cleared: true };
   }
 
+  async getMailSnapshot() {
+    return (await this.ctx.storage.get('mailSnapshot')) || null;
+  }
+
+  async saveMailSnapshot(snapshot) {
+    await this.ctx.storage.put('mailSnapshot', snapshot);
+    return { cachedAt: snapshot?.cachedAt || null };
+  }
+
+  async clearMailSnapshot() {
+    await this.ctx.storage.delete('mailSnapshot');
+    return { cleared: true };
+  }
+
   async getStatus() {
     const record = await this.ctx.storage.get('session');
     return {
@@ -48,7 +71,7 @@ function getSessionStore(env) {
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    headers: { ...API_HEADERS, 'Content-Type': 'application/json; charset=utf-8' }
   });
 }
 
@@ -478,14 +501,32 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: API_HEADERS });
+    }
+
+    if (url.pathname.startsWith('/api/mail/')) {
+      const mailCache = env.IGO_SESSION_STORE ? getSessionStore(env) : null;
+      return mailWorker.fetch(request, env, { mailCache });
+    }
+
     if (request.method === 'GET' && url.pathname === '/') {
       return new Response(APP_PAGE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 
-    if (request.method === 'GET' && url.pathname === '/health') {
+    if (request.method === 'GET' && (url.pathname === '/health' || url.pathname === '/api/igo/health')) {
       let session = { cached: false, savedAt: null };
+      let mailCache = { cachedAt: null, messageCount: 0 };
       if (env.IGO_SESSION_STORE) {
-        session = await getSessionStore(env).getStatus().catch(() => session);
+        const stateStore = getSessionStore(env);
+        session = await stateStore.getStatus().catch(() => session);
+        const snapshot = await stateStore.getMailSnapshot().catch(() => null);
+        if (snapshot) {
+          mailCache = {
+            cachedAt: snapshot.cachedAt || null,
+            messageCount: Array.isArray(snapshot.messages) ? snapshot.messages.length : 0
+          };
+        }
       }
       return json({
         ok: true,
@@ -495,11 +536,15 @@ export default {
         sessionSavedAt: session.savedAt,
         usernameSecret: Boolean(env.IGO_USERNAME),
         passwordSecret: Boolean(env.IGO_PASSWORD),
-        apiKeySecret: Boolean(env.TEST_API_KEY)
+        apiKeySecret: Boolean(env.TEST_API_KEY),
+        mailUsernameSecret: Boolean(env.EWS_USERNAME),
+        mailPasswordSecret: Boolean(env.EWS_PASSWORD),
+        mailEndpoint: '/api/mail',
+        mailCache
       });
     }
 
-    if (request.method === 'POST' && url.pathname === '/session/reset') {
+    if (request.method === 'POST' && (url.pathname === '/session/reset' || url.pathname === '/api/igo/session/reset')) {
       if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
         return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
       }
@@ -508,7 +553,7 @@ export default {
       return json({ ok: true, message: 'Kayıtlı iGO oturumu temizlendi.' });
     }
 
-    if (request.method !== 'POST' || (url.pathname !== '/query' && url.pathname !== '/test')) {
+    if (request.method !== 'POST' || !['/query', '/test', '/api/igo/query'].includes(url.pathname)) {
       return json({ ok: false, error: 'Endpoint bulunamadı.' }, 404);
     }
 
@@ -532,10 +577,14 @@ export default {
 
     return new Response(queryStream(env, input), {
       headers: {
+        ...API_HEADERS,
         'Content-Type': 'application/x-ndjson; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff'
       }
     });
+  },
+
+  async scheduled(_controller, env, ctx) {
+    if (!env.EWS_USERNAME || !env.EWS_PASSWORD || !env.IGO_SESSION_STORE) return;
+    ctx.waitUntil(refreshMailCache(env, getSessionStore(env)));
   }
 };
