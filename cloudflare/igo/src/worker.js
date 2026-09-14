@@ -12,7 +12,7 @@ import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
-const RELEASE_VERSION = '1.6.0c';
+const RELEASE_VERSION = '1.6.0d';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
