@@ -1,7 +1,5 @@
 const state = {
   busy: false,
-  extensionAvailable: false,
-  pendingFlightNumber: '',
   lastContext: null,
   crews: [],
   igoResult: null,
@@ -22,40 +20,6 @@ const HGBS_CREW_TYPES = {
   LM: 'YÜK SORUMLUSU',
   FC: 'MÜRETTEBAT'
 };
-
-const extensionRequests = new Map();
-
-window.addEventListener('message', event => {
-  if (event.source !== window || event.data?.source !== 'otobeyan-extension') return;
-  if (event.data.type === 'READY') {
-    state.extensionAvailable = true;
-    if (document.getElementById('otobeyanStatus')) checkIgoConnectivity();
-    return;
-  }
-  if (event.data.type !== 'RESPONSE') return;
-  const pending = extensionRequests.get(event.data.requestId);
-  if (!pending) return;
-  extensionRequests.delete(event.data.requestId);
-  clearTimeout(pending.timeout);
-  if (event.data.ok) pending.resolve(event.data.result);
-  else {
-    const error = new Error(event.data.error || 'Chrome eklentisi hatası.');
-    error.code = event.data.code || 'IGO_BRIDGE_ERROR';
-    pending.reject(error);
-  }
-});
-
-function extensionRequest(type, payload = {}, timeoutMs = 60_000) {
-  return new Promise((resolve, reject) => {
-    const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
-    const timeout = setTimeout(() => {
-      extensionRequests.delete(requestId);
-      reject(new Error('OtoBeyan Chrome eklentisi yanıt vermedi.'));
-    }, timeoutMs);
-    extensionRequests.set(requestId, { resolve, reject, timeout });
-    window.postMessage({ source: 'otobeyan-page', type, requestId, payload }, '*');
-  });
-}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, character => ({
@@ -82,29 +46,6 @@ function getMainState() {
   } catch {
     return null;
   }
-}
-
-function getExcelContext(flightNumber) {
-  const appState = getMainState();
-  const rows = Array.isArray(appState?.rows) ? appState.rows : [];
-  const matches = rows.filter(row => normalizeFlightNumber(row.flightNo) === flightNumber);
-  const departures = matches.filter(row => String(row.type || '').toLocaleUpperCase('tr-TR').includes('GİDİŞ'));
-  const candidates = departures.length ? departures : matches;
-  if (!candidates.length) return null;
-
-  const dates = [...new Set(candidates.map(row => normalizeDate(row.flightDate)).filter(Boolean))];
-  if (dates.length !== 1) return { ambiguous: true, candidates };
-  const row = candidates.find(item => normalizeDate(item.flightDate) === dates[0]) || candidates[0];
-  return {
-    flightNumber,
-    flightDate: dates[0],
-    tailNumber: row.reg || '',
-    departurePortCode: row.departureAirport || '',
-    arrivalPortCode: row.arrivalAirport || '',
-    scheduledTime: row.time || '',
-    rowIndex: rows.indexOf(row),
-    row
-  };
 }
 
 function installStyles() {
@@ -280,15 +221,10 @@ function addMessage(content, type = 'bot', html = false) {
 
 function setBusy(busy) {
   state.busy = busy;
-  const send = document.getElementById('otobeyanSend');
-  const attach = document.getElementById('otobeyanAttach');
-  if (send) send.disabled = busy;
-  if (attach) attach.disabled = busy;
 }
 
 async function checkIgoConnectivity() {
   const status = document.getElementById('otobeyanStatus');
-  state.extensionAvailable = false;
   try {
     const health = await globalThis.OtoBeyanApi?.health?.();
     if (health && (!health.usernameSecret || !health.passwordSecret)) {
@@ -307,81 +243,6 @@ async function checkIgoConnectivity() {
 
 async function openIgoLogin() {
   addMessage('iGO girişi gerekiyorsa ilk Load Sheet sorgusunda güvenli Live View bağlantısı açılacak. Oturum Worker’da saklandığı için sonraki sorgularda tekrar CAPTCHA istenmez.', 'bot');
-}
-
-function openMailLogin() {
-  if (!globalThis.BeyanMail?.openLogin) {
-    addMessage('Mail modülü henüz yüklenmedi. Sayfayı yenileyip tekrar dene.', 'error');
-    return;
-  }
-  globalThis.BeyanMail.openLogin(async () => {
-    addMessage('Mail bağlantısı hazır.', 'success');
-    if (state.lastContext) await searchCrewMail(state.lastContext);
-  });
-}
-
-function extractInputContext(text) {
-  return {
-    flightNumber: normalizeFlightNumber(text),
-    flightDate: normalizeDate(text)
-  };
-}
-
-function copyCrewListFromMainScope() {
-  try {
-    return globalThis.eval(`typeof _crewParsedList !== 'undefined'
-      ? _crewParsedList.map(item => ({ ...item }))
-      : []`);
-  } catch {
-    return [];
-  }
-}
-
-async function fetchCrewFromConnectedMail(context) {
-  if (!globalThis.BeyanMail?.isConnected?.()) {
-    return { status: 'not-connected', crews: [], message: 'Mail bağlantısı açık değil.' };
-  }
-
-  let original;
-  try {
-    original = globalThis.eval(`({
-      detail: typeof _currentFlightDetail === 'undefined' ? null : _currentFlightDetail,
-      baseId: typeof _currentFlightBaseId === 'undefined' ? null : _currentFlightBaseId,
-      pdfFile: typeof _crewPdfFile === 'undefined' ? null : _crewPdfFile,
-      crews: typeof _crewParsedList === 'undefined' ? [] : _crewParsedList
-    })`);
-    globalThis.__otobeyanMailContext = {
-      flightNumber: context.flightNumber,
-      flightDate: context.flightDate,
-      tailNumber: context.tailNumber || '',
-      departurePortCode: context.departurePortCode || '',
-      arrivalPortCode: context.arrivalPortCode || ''
-    };
-    globalThis.eval(`
-      _currentFlightDetail = globalThis.__otobeyanMailContext;
-      _currentFlightBaseId = null;
-      _crewPdfFile = null;
-      _crewParsedList = [];
-    `);
-    await globalThis.BeyanMail.fetchCrewPdf();
-    const crews = copyCrewListFromMainScope();
-    const statusText = document.getElementById('crewStatusLine')?.textContent?.trim() || '';
-    return crews.length
-      ? { status: 'found', crews, message: statusText }
-      : { status: 'not-found', crews: [], message: statusText || 'Bu sefer/tarih için ekip PDF bulunamadı.' };
-  } finally {
-    if (original) {
-      globalThis.__otobeyanOriginalMailState = original;
-      globalThis.eval(`
-        _currentFlightDetail = globalThis.__otobeyanOriginalMailState.detail;
-        _currentFlightBaseId = globalThis.__otobeyanOriginalMailState.baseId;
-        _crewPdfFile = globalThis.__otobeyanOriginalMailState.pdfFile;
-        _crewParsedList = globalThis.__otobeyanOriginalMailState.crews;
-      `);
-    }
-    delete globalThis.__otobeyanMailContext;
-    delete globalThis.__otobeyanOriginalMailState;
-  }
 }
 
 async function searchCrewMail(context) {
@@ -497,40 +358,6 @@ function renderCrewEditor(crews, source) {
   state.crewPanel = message;
   renderActionPanel();
   renderLiveSummary();
-}
-
-async function submitText() {
-  if (state.busy) return;
-  const input = document.getElementById('otobeyanInput');
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = '';
-  addMessage(text, 'user');
-
-  let context = extractInputContext(text);
-  if (!context.flightNumber && state.pendingFlightNumber && context.flightDate) context.flightNumber = state.pendingFlightNumber;
-  if (!context.flightNumber) {
-    addMessage('Sefer numarasını XQ254 biçiminde yaz.', 'error');
-    return;
-  }
-
-  const excel = getExcelContext(context.flightNumber);
-  if (!context.flightDate && excel?.flightDate) context = { ...excel, ...context, flightDate: excel.flightDate };
-  if (!context.flightDate) {
-    state.pendingFlightNumber = context.flightNumber;
-    addMessage(`${context.flightNumber} için Excel’de tek tarih bulamadım. Tarihi 13.09.2026 biçiminde yaz.`, 'bot');
-    return;
-  }
-
-  state.pendingFlightNumber = '';
-  state.lastContext = { ...excel, ...context };
-  state.crews = [];
-  state.igoResult = null;
-  clearActionPanel();
-  const mailPromise = searchCrewMail(state.lastContext);
-  await runIgoQuery(state.lastContext);
-  await mailPromise;
-  renderActionPanel();
 }
 
 async function runIgoQuery(context) {
@@ -876,42 +703,6 @@ async function confirmOpenAndDeclare() {
       button.disabled = false;
       button.textContent = 'Tekrar Dene: Uçuşu Aç + Beyan Et →';
     }
-  }
-}
-
-async function handlePdf(event) {
-  const file = event.target.files?.[0];
-  event.target.value = '';
-  if (!file) return;
-  addMessage(`📎 ${file.name}`, 'user');
-  setBusy(true);
-  try {
-    if (typeof globalThis.readPdfText !== 'function' || typeof globalThis.parseCrewPdfFileData !== 'function') {
-      throw new Error('GenDec PDF parserı henüz yüklenmedi. Sayfayı yenileyip tekrar dene.');
-    }
-    const text = await globalThis.readPdfText(file);
-    const flightNumber = normalizeFlightNumber(text);
-    const excel = flightNumber ? getExcelContext(flightNumber) : null;
-    const flightDate = normalizeDate(text) || excel?.flightDate || '';
-    const tailMatch = String(text).toUpperCase().match(/\bTC\s*[- ]?\s*([A-Z0-9]{3})\b/);
-    const tailNumber = tailMatch ? `TC-${tailMatch[1]}` : excel?.tailNumber || '';
-    const parsed = await globalThis.parseCrewPdfFileData(file, { flightNo: flightNumber, tailNumber });
-    if (!parsed.crews?.length) throw new Error('PDF içinde ekip listesi bulunamadı.');
-    state.crews = [];
-    state.igoResult = null;
-    clearActionPanel();
-    renderCrewEditor(parsed.crews, `Yüklenen PDF${flightNumber ? ` · ${flightNumber}` : ''}`);
-    if (flightNumber && flightDate) {
-      state.lastContext = { ...excel, flightNumber, flightDate, tailNumber };
-      await runIgoQuery(state.lastContext);
-      renderActionPanel();
-    } else {
-      addMessage('Ekip hazır. iGO sorgusu için PDF’te sefer/tarih bulunamadı; sefer numarasını yaz.', 'bot');
-    }
-  } catch (error) {
-    addMessage(error.message, 'error');
-  } finally {
-    setBusy(false);
   }
 }
 

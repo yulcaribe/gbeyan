@@ -3,11 +3,12 @@
 
   const loaderUrl = document.currentScript?.src || '';
   const baseUrl = loaderUrl.slice(0, loaderUrl.lastIndexOf('/') + 1);
+  const buildVersion = new URL(loaderUrl, location.href).searchParams.get('v') || 'latest';
   const files = ['config.js', 'client/api.js', 'quickbeyan.js'];
 
   files.reduce((ready, file) => ready.then(() => new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `${baseUrl}${file}`;
+    script.src = `${baseUrl}${file}?v=${buildVersion}`;
     script.async = false;
     script.onload = resolve;
     script.onerror = () => reject(new Error(`OtoBeyan dosyası yüklenemedi: ${file}`));
