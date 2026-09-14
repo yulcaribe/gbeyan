@@ -68,7 +68,27 @@
     };
   }
 
+  async function cachedIgo(input) {
+    const params = new URLSearchParams({
+      flightNumber: String(input?.flightNumber || ''),
+      flightDate: String(input?.flightDate || '')
+    });
+    const response = await fetch(endpoint(`/api/igo/loadsheet?${params}`), {
+      cache: 'no-store',
+      headers: headers()
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(await readError(response));
+    return response.json();
+  }
+
   async function queryIgo(input, onEvent = () => {}) {
+    const cached = await cachedIgo(input);
+    if (cached) {
+      onEvent({ type: 'result', data: cached });
+      return cached;
+    }
+
     const response = await fetch(endpoint('/api/igo/query'), {
       method: 'POST',
       cache: 'no-store',
@@ -107,6 +127,7 @@
     syncMail,
     recentMail,
     flightPdf,
+    cachedIgo,
     queryIgo
   });
 })(globalThis);

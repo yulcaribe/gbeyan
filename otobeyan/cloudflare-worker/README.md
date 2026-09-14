@@ -39,6 +39,8 @@ gerekmez. Durable Object ilk deployment sırasında `v1` migration ile oluşturu
 `GET /health` binding, secret ve kayıtlı oturum durumunu gösterir.
 
 - `POST /api/igo/query`: Load Sheet sorgusu
+- `GET /api/igo/loadsheet?flightNumber=XQ254&flightDate=2026-09-13`: taze
+  Load Sheet JSON cache sonucu
 - `POST /api/igo/session/reset`: kayıtlı iGO oturumunu temizleme
 - `GET /api/mail/health`: mail modülü durumu
 - `GET /api/mail/login`: sabit posta kutusu ve klasör erişim kontrolü
@@ -53,10 +55,12 @@ Geçiş uyumluluğu için eski `/query`, `/session/reset` ve `/test` iGO yollar�
 
 Mail endpointleri kullanıcı adı ve parolayı tarayıcıdan kabul etmez. Tüm özel
 mail ve iGO endpointleri `Authorization: Bearer <TEST_API_KEY>` ister.
-Mesaj listesi ortak Durable Object içinde beş dakika tutulur ve Cron Trigger ile
-beş dakikada bir yenilenir. PDF'ten çıkarılmış ekip JSON cache'i bir sonraki
-aşamada aynı state store'a eklenecektir; mevcut sürüm bu alanı hazırmış gibi
-göstermez.
+Cron Trigger beş dakikada bir çalışır. Mesaj listesi ortak Durable Object içinde
+tutulur. Aynı cron, kayıtlı iGO oturumu hâlâ geçerliyse AYT kalkış listesindeki
+oluşmuş Load Sheet'lerin son EDNO'sunu, imza durumundan bağımsız olarak JSON
+cache'e yazar. İstemci önce bu JSON endpoint'ini kullanır, taze kayıt yoksa
+mevcut canlı Browser Rendering sorgusuna geri döner. `(Digitally Signed)` olmayan
+Load Sheet de modalı doldurur; kullanıcıya yalnız `Uçuş kapanmadı` uyarısı gösterilir.
 
 ## Güvenlik
 

@@ -14,6 +14,8 @@ const IGO_ORIGIN = 'https://igo.sunexpress.com';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
+const LOADSHEET_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+const LOADSHEET_CACHE_RETENTION_MS = 36 * 60 * 60 * 1000;
 const API_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
@@ -55,6 +57,40 @@ export class IgoSessionStore extends DurableObject {
     return { cleared: true };
   }
 
+  async getLoadSheet(flightNumber, flightDate) {
+    const snapshot = (await this.ctx.storage.get('loadSheetSnapshot')) || { entries: {} };
+    return snapshot.entries?.[loadSheetCacheKey(flightNumber, flightDate)] || null;
+  }
+
+  async saveLoadSheet(result) {
+    const key = loadSheetCacheKey(result?.query?.flightNumber, result?.query?.flightDate);
+    if (!key) throw new Error('Load Sheet cache anahtarı oluşturulamadı.');
+
+    const now = Date.now();
+    const cachedAt = new Date(now).toISOString();
+    const snapshot = (await this.ctx.storage.get('loadSheetSnapshot')) || { entries: {} };
+    const entries = snapshot.entries && typeof snapshot.entries === 'object' ? snapshot.entries : {};
+
+    for (const [entryKey, entry] of Object.entries(entries)) {
+      const cachedTime = Date.parse(entry?.cachedAt || '');
+      if (!Number.isFinite(cachedTime) || now - cachedTime > LOADSHEET_CACHE_RETENTION_MS) {
+        delete entries[entryKey];
+      }
+    }
+
+    entries[key] = { ...result, cachedAt };
+    await this.ctx.storage.put('loadSheetSnapshot', { cachedAt, entries });
+    return { key, cachedAt };
+  }
+
+  async getLoadSheetStatus() {
+    const snapshot = (await this.ctx.storage.get('loadSheetSnapshot')) || { cachedAt: null, entries: {} };
+    return {
+      cachedAt: snapshot.cachedAt || null,
+      count: Object.keys(snapshot.entries || {}).length
+    };
+  }
+
   async getStatus() {
     const record = await this.ctx.storage.get('session');
     return {
@@ -92,6 +128,29 @@ function normalizeDate(value) {
   if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
   match = text.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
   return match ? `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}` : '';
+}
+
+function loadSheetCacheKey(flightNumber, flightDate) {
+  const normalizedFlight = normalizeFlightNumber(flightNumber);
+  const normalizedDate = normalizeDate(flightDate);
+  return normalizedFlight && normalizedDate ? `${normalizedFlight}|${normalizedDate}` : '';
+}
+
+function isFreshLoadSheet(entry) {
+  const cachedAt = Date.parse(entry?.cachedAt || '');
+  return Number.isFinite(cachedAt) && Date.now() - cachedAt <= LOADSHEET_CACHE_MAX_AGE_MS;
+}
+
+function cachedLoadSheetResult(entry) {
+  return {
+    status: 'ready',
+    igoSessionReused: true,
+    fromCache: true,
+    cachedAt: entry.cachedAt,
+    query: entry.query,
+    flight: entry.flight,
+    loadSheet: entry.loadSheet
+  };
 }
 
 function splitDate(value) {
@@ -292,6 +351,39 @@ async function openIgoSession(env, browser, emit) {
   return { context, page, reused: false };
 }
 
+async function readGridRows(page) {
+  return page.evaluate(() => {
+    function cellText(cell) {
+      return String(cell?.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    return Array.from(document.querySelectorAll('tr[id*="_DXDataRow"]')).map(row => {
+      const cells = Array.from(row.querySelectorAll('td'));
+      const flightLink = row.querySelector('a[href*="pgWBCalcForm.aspx"]');
+      if (!flightLink || cells.length < 6) return null;
+
+      const href = flightLink.getAttribute('href') || '';
+      const routeMatch = cellText(cells[3]).match(/\b([A-Z]{3})\s*-\s*([A-Z]{3})\b/i);
+      const wbMainId = row.innerHTML.match(/OpenWBPrintPopup\(\s*['"](\d+)['"]\s*\)/i)?.[1] || '';
+      const edno = row.innerHTML.match(/Load\s*Sheet\s*\(EDNO:\s*(\d+)\s*\)/i)?.[1] || '';
+
+      return {
+        flightDate: cellText(cells[0]),
+        tailNumber: cellText(cells[1]),
+        flightNumber: cellText(flightLink),
+        departurePortCode: routeMatch?.[1] || '',
+        arrivalPortCode: routeMatch?.[2] || '',
+        scheduledTime: cellText(cells[4]),
+        dcsStatus: cellText(cells[5]),
+        fnm: href.match(/[?&]FNM=(\d+)/i)?.[1] || '',
+        wbMainId,
+        loadsheetEdno: edno ? Number.parseInt(edno, 10) : null,
+        approvalStatus: cells.map(cellText).find(value => /^Approved$/i.test(value)) || ''
+      };
+    }).filter(Boolean);
+  });
+}
+
 async function searchGrid(page, flight, date) {
   return page.evaluate(async args => {
     function cellText(cell) {
@@ -363,9 +455,71 @@ async function fetchLoadSheet(context, selected) {
   }
 }
 
+async function refreshLoadSheetCache(env) {
+  if (!env.BROWSER || !env.IGO_SESSION_STORE) return { skipped: true, reason: 'binding-missing' };
+  const store = getSessionStore(env);
+  const saved = await store.getSession();
+  if (!saved?.storageState) return { skipped: true, reason: 'session-missing' };
+
+  const browser = await launch(env.BROWSER, { keep_alive: 240_000 });
+  let context;
+  try {
+    context = await browser.newContext({ storageState: saved.storageState });
+    const page = await context.newPage();
+    await gotoWithAbortRetry(page, FLIGHT_LIST_URL);
+    if (isLoginUrl(page.url())) {
+      await store.clearSession();
+      return { skipped: true, reason: 'session-expired' };
+    }
+
+    await page.locator('tr[id*="_DXDataRow"]').first().waitFor({ state: 'attached', timeout: 30_000 }).catch(() => {});
+    const rows = await readGridRows(page);
+    const candidates = rows.filter(row =>
+      row.wbMainId
+      && normalizeFlightNumber(row.flightNumber).startsWith('XQ')
+      && String(row.departurePortCode || '').toUpperCase() === 'AYT'
+      && normalizeDate(row.flightDate)
+    );
+    let refreshed = 0;
+    let waitingForFinal = 0;
+
+    for (const selected of candidates) {
+      const flightNumber = normalizeFlightNumber(selected.flightNumber);
+      const flightDate = normalizeDate(selected.flightDate);
+      try {
+        const loadSheet = await fetchLoadSheet(context, selected);
+        if (!loadSheet.finalized) waitingForFinal += 1;
+        await store.saveLoadSheet({
+          status: 'ready',
+          query: { flightNumber, flightDate },
+          flight: selected,
+          loadSheet
+        });
+        refreshed += 1;
+      } catch (error) {
+        if (/oturumu sona erdi/i.test(String(error?.message || error))) {
+          await store.clearSession();
+          return { skipped: true, reason: 'session-expired', refreshed, waitingForFinal };
+        }
+      }
+    }
+
+    await saveSessionState(env, context);
+    return { skipped: false, found: candidates.length, refreshed, waitingForFinal };
+  } finally {
+    await context?.close().catch(() => {});
+    await browser.close().catch(() => {});
+  }
+}
+
 async function runQuery(env, input, emit) {
   const flight = splitFlightNumber(input.flightNumber);
   const date = splitDate(input.flightDate);
+  const cached = await getSessionStore(env).getLoadSheet(flight.normalized, date.normalized);
+  if (isFreshLoadSheet(cached)) {
+    emit({ type: 'result', data: cachedLoadSheetResult(cached) });
+    return;
+  }
   const browser = await launch(env.BROWSER, { keep_alive: 600_000 });
 
   try {
@@ -387,16 +541,16 @@ async function runQuery(env, input, emit) {
     emit({ type: 'progress', message: `Load Sheet ID ${selected.wbMainId} okunuyor…` });
     const loadSheet = await fetchLoadSheet(context, selected);
     await saveSessionState(env, context);
-    emit({
-      type: 'result',
-      data: {
-        status: 'ready',
-        igoSessionReused: reused,
-        query: { flightNumber: flight.normalized, flightDate: date.normalized },
-        flight: selected,
-        loadSheet
-      }
-    });
+    const result = {
+      status: 'ready',
+      igoSessionReused: reused,
+      fromCache: false,
+      query: { flightNumber: flight.normalized, flightDate: date.normalized },
+      flight: selected,
+      loadSheet
+    };
+    await getSessionStore(env).saveLoadSheet(result);
+    emit({ type: 'result', data: result });
   } catch (error) {
     if (/oturumu (sona erdi|doğrulanamadı)/i.test(String(error?.message || error))) {
       await getSessionStore(env).clearSession().catch(() => {});
@@ -520,12 +674,42 @@ export default {
       return new Response(APP_PAGE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/igo/loadsheet') {
+      if (!env.TEST_API_KEY) {
+        return json({ ok: false, error: 'TEST_API_KEY secret eksik.' }, 503);
+      }
+      if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
+        return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
+      }
+      if (!env.IGO_SESSION_STORE) {
+        return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
+      }
+
+      try {
+        const flight = splitFlightNumber(url.searchParams.get('flightNumber'));
+        const date = splitDate(url.searchParams.get('flightDate'));
+        const cached = await getSessionStore(env).getLoadSheet(flight.normalized, date.normalized);
+        if (!isFreshLoadSheet(cached)) {
+          return json({
+            ok: false,
+            status: 'cache_miss',
+            query: { flightNumber: flight.normalized, flightDate: date.normalized }
+          }, 404);
+        }
+        return json(cachedLoadSheetResult(cached));
+      } catch (error) {
+        return json({ ok: false, error: error.message || 'İstek geçersiz.' }, 400);
+      }
+    }
+
     if (request.method === 'GET' && (url.pathname === '/health' || url.pathname === '/api/igo/health')) {
       let session = { cached: false, savedAt: null };
       let mailCache = { cachedAt: null, messageCount: 0 };
+      let loadSheetCache = { cachedAt: null, count: 0 };
       if (env.IGO_SESSION_STORE) {
         const stateStore = getSessionStore(env);
         session = await stateStore.getStatus().catch(() => session);
+        loadSheetCache = await stateStore.getLoadSheetStatus().catch(() => loadSheetCache);
         const snapshot = await stateStore.getMailSnapshot().catch(() => null);
         if (snapshot) {
           mailCache = {
@@ -546,7 +730,8 @@ export default {
         mailUsernameSecret: Boolean(env.EWS_USERNAME),
         mailPasswordSecret: Boolean(env.EWS_PASSWORD),
         mailEndpoint: '/api/mail',
-        mailCache
+        mailCache,
+        loadSheetCache
       });
     }
 
@@ -590,7 +775,12 @@ export default {
   },
 
   async scheduled(_controller, env, ctx) {
-    if (!env.EWS_USERNAME || !env.EWS_PASSWORD || !env.IGO_SESSION_STORE) return;
-    ctx.waitUntil(refreshMailCache(env, getSessionStore(env)));
+    if (!env.IGO_SESSION_STORE) return;
+    const jobs = [];
+    if (env.EWS_USERNAME && env.EWS_PASSWORD) {
+      jobs.push(refreshMailCache(env, getSessionStore(env)));
+    }
+    if (env.BROWSER) jobs.push(refreshLoadSheetCache(env));
+    if (jobs.length) ctx.waitUntil(Promise.allSettled(jobs));
   }
 };
