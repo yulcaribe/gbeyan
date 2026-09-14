@@ -5,6 +5,9 @@
   "compatibility_date": "2026-09-14",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "vars": {
+    "LOADSHEET_BACKGROUND_REFRESH": "off"
+  },
   "secrets": {
     "required": ["IGO_USERNAME", "IGO_PASSWORD", "EWS_USERNAME", "EWS_PASSWORD", "TEST_API_KEY"]
   },

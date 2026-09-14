@@ -115,11 +115,15 @@ export class IgoSessionStore extends DurableObject {
     };
   }
 
-  async acquireBrowserLease(token, ttlMs = BROWSER_LEASE_TTL_MS) {
+  async acquireBrowserLease(token, ttlMs = BROWSER_LEASE_TTL_MS, purpose = 'query') {
     return this.ctx.blockConcurrencyWhile(async () => {
       const now = Date.now();
       const lease = await this.ctx.storage.get('browserLease');
-      if (lease?.token && lease.token !== token && Number(lease.expiresAt || 0) > now) {
+      const leaseAge = now - Number(lease?.acquiredAt || 0);
+      const staleRefreshLease = lease?.purpose === 'refresh' && leaseAge > 90_000;
+      const staleLegacyLease = !lease?.purpose && leaseAge > 120_000;
+      if (lease?.token && lease.token !== token && Number(lease.expiresAt || 0) > now
+        && !staleRefreshLease && !staleLegacyLease) {
         return {
           acquired: false,
           reason: 'in-use',
@@ -139,10 +143,10 @@ export class IgoSessionStore extends DurableObject {
 
       const expiresAt = now + Math.max(30_000, Number(ttlMs) || BROWSER_LEASE_TTL_MS);
       await this.ctx.storage.put({
-        browserLease: { token, acquiredAt: now, expiresAt },
+        browserLease: { token, purpose, acquiredAt: now, expiresAt },
         browserLastLaunchAt: now
       });
-      return { acquired: true, token, acquiredAt: now, expiresAt };
+      return { acquired: true, token, purpose, acquiredAt: now, expiresAt };
     });
   }
 
@@ -152,6 +156,11 @@ export class IgoSessionStore extends DurableObject {
       if (lease?.token === token) await this.ctx.storage.delete('browserLease');
       return { released: lease?.token === token };
     });
+  }
+
+  async clearBrowserLease() {
+    await this.ctx.storage.delete('browserLease');
+    return { cleared: true };
   }
 }
 
@@ -168,6 +177,10 @@ function isBrowserLaunchRateLimit(error) {
   return /429|rate\s*limit|too many browser/i.test(message);
 }
 
+function backgroundLoadSheetRefreshEnabled(env) {
+  return /^(1|true|on|enabled)$/i.test(String(env.LOADSHEET_BACKGROUND_REFRESH || 'off'));
+}
+
 function friendlyBrowserError(error) {
   const message = String(error?.message || error || '');
   if (/daily|per day|time limit.*today|browser time limit/i.test(message)) {
@@ -179,14 +192,19 @@ function friendlyBrowserError(error) {
   return error instanceof Error ? error : new Error(message || 'Load Sheet sorgusu başarısız.');
 }
 
-async function openQueuedBrowser(env, { waitMs = 0, leaseTtlMs = BROWSER_LEASE_TTL_MS, keepAliveMs = 240_000 } = {}) {
+async function openQueuedBrowser(env, {
+  waitMs = 0,
+  leaseTtlMs = BROWSER_LEASE_TTL_MS,
+  keepAliveMs = 240_000,
+  purpose = 'query'
+} = {}) {
   const store = getSessionStore(env);
   const token = crypto.randomUUID();
   const deadline = Date.now() + Math.max(0, waitMs);
   let rateLimitRetries = 0;
 
   while (true) {
-    const lease = await store.acquireBrowserLease(token, leaseTtlMs);
+    const lease = await store.acquireBrowserLease(token, leaseTtlMs, purpose);
     if (!lease?.acquired) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) return null;
@@ -677,7 +695,12 @@ async function refreshLoadSheetCache(env) {
 
   let browserHandle;
   try {
-    browserHandle = await openQueuedBrowser(env, { waitMs: 0, keepAliveMs: 240_000 });
+    browserHandle = await openQueuedBrowser(env, {
+      waitMs: 0,
+      leaseTtlMs: 90_000,
+      keepAliveMs: 90_000,
+      purpose: 'refresh'
+    });
   } catch (error) {
     return { skipped: true, reason: isBrowserLaunchRateLimit(error) ? 'browser-rate-limit' : 'browser-launch-failed' };
   }
@@ -759,7 +782,8 @@ async function runQuery(env, input, emit) {
   const browserHandle = await openQueuedBrowser(env, {
     waitMs: BROWSER_QUERY_WAIT_MS,
     leaseTtlMs: BROWSER_LEASE_TTL_MS,
-    keepAliveMs: 600_000
+    keepAliveMs: 600_000,
+    purpose: 'query'
   });
   if (!browserHandle) {
     const error = new Error('Load Sheet servisi şu an yoğun. Kısa süre sonra yeniden dene.');
@@ -942,7 +966,8 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/api/igo/session/reset') {
       if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
-      await getSessionStore(env).clearSession();
+      const store = getSessionStore(env);
+      await Promise.all([store.clearSession(), store.clearBrowserLease()]);
       return json({ ok: true });
     }
 
@@ -975,7 +1000,9 @@ export default {
     if (env.EWS_USERNAME && env.EWS_PASSWORD) {
       jobs.push(refreshMailCache(env, getSessionStore(env)));
     }
-    if (env.BROWSER) jobs.push(refreshLoadSheetCache(env));
+    if (env.BROWSER && backgroundLoadSheetRefreshEnabled(env)) {
+      jobs.push(refreshLoadSheetCache(env));
+    }
     if (jobs.length) ctx.waitUntil(Promise.allSettled(jobs));
   }
 };
