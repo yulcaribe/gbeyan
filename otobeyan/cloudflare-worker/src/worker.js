@@ -1,5 +1,5 @@
-// OtoBeyan iGO Browser Run
-// Bu dosya Cloudflare Workers Builds tarafından package.json ile bundle edilir.
+// Private browser automation gateway.
+// This file is bundled by Cloudflare Workers Builds via package.json.
 // Browser binding adı: BROWSER
 // Gerekli Worker Secret'ları:
 // IGO_USERNAME, IGO_PASSWORD, EWS_USERNAME, EWS_PASSWORD, TEST_API_KEY
@@ -9,6 +9,7 @@
 import { launch } from '@cloudflare/playwright';
 import { DurableObject } from 'cloudflare:workers';
 import mailWorker, { refreshMailCache } from './mail.js';
+import PRIVATE_PAGE from './private-page.js';
 
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
@@ -17,11 +18,15 @@ const SESSION_OBJECT_NAME = 'primary-igo-session';
 const LOADSHEET_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const LOADSHEET_CACHE_RETENTION_MS = 36 * 60 * 60 * 1000;
 const API_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'null',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Cache-Control': 'no-store',
-  'X-Content-Type-Options': 'nosniff'
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"
 };
 
 export class IgoSessionStore extends DurableObject {
@@ -91,6 +96,10 @@ export class IgoSessionStore extends DurableObject {
     };
   }
 
+  async getLoadSheetSnapshot() {
+    return (await this.ctx.storage.get('loadSheetSnapshot')) || { cachedAt: null, entries: {} };
+  }
+
   async getStatus() {
     const record = await this.ctx.storage.get('session');
     return {
@@ -108,6 +117,37 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...API_HEADERS, 'Content-Type': 'application/json; charset=utf-8' }
+  });
+}
+
+function safeEqual(left, right) {
+  const a = new TextEncoder().encode(String(left || ''));
+  const b = new TextEncoder().encode(String(right || ''));
+  let mismatch = a.length ^ b.length;
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    mismatch |= (a[index] || 0) ^ (b[index] || 0);
+  }
+  return mismatch === 0;
+}
+
+function hasAccess(request, env) {
+  const header = request.headers.get('Authorization') || '';
+  if (!header.startsWith('Bearer ') || !env.TEST_API_KEY) return false;
+  return safeEqual(header.slice(7), env.TEST_API_KEY);
+}
+
+function notFound() {
+  return new Response(null, {
+    status: 404,
+    headers: {
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
+      'X-Frame-Options': 'DENY',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+      'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"
+    }
   });
 }
 
@@ -661,83 +701,6 @@ function queryStream(env, input) {
   });
 }
 
-const APP_PAGE = String.raw`<!doctype html>
-<html lang="tr">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>OtoBeyan iGO</title>
-  <style>
-    body{margin:0;background:#f1f5f9;color:#172554;font:14px/1.45 system-ui,sans-serif}
-    main{max-width:680px;margin:40px auto;padding:24px;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 18px 45px #0f172a18}
-    h1{margin:0 0 8px;font-size:22px}.note{color:#64748b;margin-bottom:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:700;text-transform:uppercase;color:#64748b}.full{grid-column:1/-1}
-    input,button{border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit}button{background:#172554;color:#fff;font-weight:800;cursor:pointer;margin-top:14px;width:100%}button:disabled{opacity:.55}
-    #log{margin-top:18px;padding:12px;background:#0f172a;color:#e2e8f0;border-radius:10px;min-height:90px;white-space:pre-wrap;overflow:auto}.live{display:none;margin-top:12px;padding:12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:10px}.live a{font-weight:800;color:#92400e}
-    .result{margin-top:12px;padding:12px;background:#dcfce7;border:1px solid #86efac;border-radius:10px;white-space:pre-wrap;display:none}
-  </style>
-</head>
-<body>
-  <main>
-    <h1>OtoBeyan iGO</h1>
-    <div class="note">CAPTCHA yalnız ilk girişte veya iGO oturumu sona erdiğinde Live View üzerinden kullanıcı tarafından çözülür.</div>
-    <div class="grid">
-      <label>Sefer<input id="flight" value="XQ254"></label>
-      <label>Tarih<input id="date" type="date"></label>
-      <label class="full">OtoBeyan erişim anahtarı<input id="key" type="password" autocomplete="off"></label>
-    </div>
-    <button id="start">Load Sheet Sorgula</button>
-    <div id="live" class="live"></div>
-    <div id="log">Hazır.</div>
-    <div id="result" class="result"></div>
-  </main>
-  <script>
-    const log = document.getElementById('log');
-    const live = document.getElementById('live');
-    const resultBox = document.getElementById('result');
-    const start = document.getElementById('start');
-    document.getElementById('date').value = new Date().toISOString().slice(0,10);
-
-    function append(text){ log.textContent += '\n' + text; log.scrollTop = log.scrollHeight; }
-    function handleEvent(event){
-      if(event.type === 'progress') append('• ' + event.message);
-      if(event.type === 'session') append('✓ ' + event.message);
-      if(event.type === 'captcha'){
-        append('• CAPTCHA kullanıcı onayı bekleniyor.');
-        live.style.display = 'block';
-        live.innerHTML = '<strong>İşlem bekliyor:</strong> <a target="_blank" rel="noopener" href="' + event.liveViewUrl + '">iGO Live View’u Aç</a><br>CAPTCHA’yı çözüp giriş düğmesine bas; bu test ekranını kapatma.';
-      }
-      if(event.type === 'result'){
-        append('✓ Load Sheet başarıyla alındı.');
-        resultBox.style.display = 'block';
-        resultBox.textContent = JSON.stringify(event.data, null, 2);
-      }
-      if(event.type === 'error') append('HATA: ' + event.message);
-    }
-
-    start.addEventListener('click', async () => {
-      start.disabled = true; live.style.display = 'none'; resultBox.style.display = 'none'; log.textContent = 'Sorgu başlatılıyor…';
-      try{
-        const response = await fetch('/query', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json','Authorization':'Bearer ' + document.getElementById('key').value},
-          body: JSON.stringify({flightNumber:document.getElementById('flight').value,flightDate:document.getElementById('date').value})
-        });
-        if(!response.ok){ const body = await response.json().catch(() => ({})); throw new Error(body.error || 'HTTP ' + response.status); }
-        const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
-        while(true){
-          const chunk = await reader.read(); if(chunk.done) break;
-          buffer += decoder.decode(chunk.value, {stream:true});
-          const lines = buffer.split('\n'); buffer = lines.pop();
-          lines.filter(Boolean).forEach(line => handleEvent(JSON.parse(line)));
-        }
-      }catch(error){ append('HATA: ' + error.message); }
-      finally{ start.disabled = false; }
-    });
-  </script>
-</body>
-</html>`;
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -746,25 +709,92 @@ export default {
       return new Response(null, { status: 204, headers: API_HEADERS });
     }
 
+    if (request.method === 'GET' && url.pathname === '/') {
+      return new Response(PRIVATE_PAGE, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'X-Frame-Options': 'DENY',
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+        }
+      });
+    }
+
+    if (!url.pathname.startsWith('/api/')) return notFound();
+    if (!env.TEST_API_KEY) return json({ ok: false, error: 'Servis hazır değil.' }, 503);
+    if (!hasAccess(request, env)) {
+      if (env.AUTH_RATE_LIMITER) {
+        const key = request.headers.get('CF-Connecting-IP') || 'unknown';
+        const rateLimit = await env.AUTH_RATE_LIMITER.limit({ key }).catch(() => ({ success: true }));
+        if (!rateLimit.success) return json({ ok: false, error: 'Çok fazla deneme.' }, 429);
+      }
+      return json({ ok: false, error: 'Erişim reddedildi.' }, 401);
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/auth/verify') {
+      let sessionReady = false;
+      if (env.IGO_SESSION_STORE) {
+        const status = await getSessionStore(env).getStatus().catch(() => null);
+        sessionReady = Boolean(status?.cached);
+      }
+      return json({
+        ok: true,
+        ready: Boolean(
+          env.BROWSER && env.IGO_SESSION_STORE && env.IGO_USERNAME && env.IGO_PASSWORD
+          && env.EWS_USERNAME && env.EWS_PASSWORD
+        ),
+        sessionReady
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/admin/snapshot') {
+      if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'Servis hazır değil.' }, 503);
+      const store = getSessionStore(env);
+      const [loadSheetSnapshot, mailSnapshot] = await Promise.all([
+        store.getLoadSheetSnapshot().catch(() => ({ cachedAt: null, entries: {} })),
+        store.getMailSnapshot().catch(() => null)
+      ]);
+      const loadSheets = Object.values(loadSheetSnapshot?.entries || {}).map(entry => ({
+        cachedAt: entry?.cachedAt || null,
+        flightDate: entry?.query?.flightDate || entry?.flight?.flightDate || '',
+        flightNumber: entry?.flight?.flightNumber || entry?.loadSheet?.flightNumber || entry?.query?.flightNumber || '',
+        departurePortCode: entry?.flight?.departurePortCode || entry?.loadSheet?.departurePortCode || '',
+        arrivalPortCode: entry?.flight?.arrivalPortCode || entry?.loadSheet?.arrivalPortCode || '',
+        tailNumber: entry?.flight?.tailNumber || entry?.loadSheet?.tailNumber || '',
+        pax: entry?.loadSheet?.pax ?? null,
+        infant: entry?.loadSheet?.infant ?? null,
+        offBlockFuelKg: entry?.loadSheet?.offBlockFuelKg ?? null,
+        edno: entry?.loadSheet?.edno ?? null,
+        finalized: Boolean(entry?.loadSheet?.finalized)
+      })).sort((a, b) => `${b.flightDate}|${b.flightNumber}`.localeCompare(`${a.flightDate}|${a.flightNumber}`));
+      const genDec = (mailSnapshot?.messages || []).map(message => ({
+        date: message?.date || '',
+        subject: message?.subject || '',
+        from: message?.from || '',
+        attachments: (message?.attachments || [])
+          .filter(attachment => String(attachment?.name || '').toLowerCase().endsWith('.pdf'))
+          .map(attachment => ({ name: attachment?.name || '', size: Number(attachment?.size || 0) }))
+      })).filter(message => message.attachments.length);
+      return json({
+        ok: true,
+        loadSheetCachedAt: loadSheetSnapshot?.cachedAt || null,
+        genDecCachedAt: mailSnapshot?.cachedAt || null,
+        loadSheets,
+        genDec
+      });
+    }
+
     if (url.pathname.startsWith('/api/mail/')) {
       const mailCache = env.IGO_SESSION_STORE ? getSessionStore(env) : null;
       return mailWorker.fetch(request, env, { mailCache });
     }
 
-    if (request.method === 'GET' && url.pathname === '/') {
-      return new Response(APP_PAGE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
-    }
-
     if (request.method === 'GET' && url.pathname === '/api/igo/loadsheet') {
-      if (!env.TEST_API_KEY) {
-        return json({ ok: false, error: 'TEST_API_KEY secret eksik.' }, 503);
-      }
-      if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
-        return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
-      }
-      if (!env.IGO_SESSION_STORE) {
-        return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
-      }
+      if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'Servis hazır değil.' }, 503);
 
       try {
         const flight = splitFlightNumber(url.searchParams.get('flightNumber'));
@@ -783,59 +813,16 @@ export default {
       }
     }
 
-    if (request.method === 'GET' && (url.pathname === '/health' || url.pathname === '/api/igo/health')) {
-      let session = { cached: false, savedAt: null };
-      let mailCache = { cachedAt: null, messageCount: 0 };
-      let loadSheetCache = { cachedAt: null, count: 0 };
-      if (env.IGO_SESSION_STORE) {
-        const stateStore = getSessionStore(env);
-        session = await stateStore.getStatus().catch(() => session);
-        loadSheetCache = await stateStore.getLoadSheetStatus().catch(() => loadSheetCache);
-        const snapshot = await stateStore.getMailSnapshot().catch(() => null);
-        if (snapshot) {
-          mailCache = {
-            cachedAt: snapshot.cachedAt || null,
-            messageCount: Array.isArray(snapshot.messages) ? snapshot.messages.length : 0
-          };
-        }
-      }
-      return json({
-        ok: true,
-        browserBinding: Boolean(env.BROWSER),
-        sessionStoreBinding: Boolean(env.IGO_SESSION_STORE),
-        sessionCached: session.cached,
-        sessionSavedAt: session.savedAt,
-        usernameSecret: Boolean(env.IGO_USERNAME),
-        passwordSecret: Boolean(env.IGO_PASSWORD),
-        apiKeySecret: Boolean(env.TEST_API_KEY),
-        mailUsernameSecret: Boolean(env.EWS_USERNAME),
-        mailPasswordSecret: Boolean(env.EWS_PASSWORD),
-        mailEndpoint: '/api/mail',
-        mailCache,
-        loadSheetCache
-      });
-    }
-
-    if (request.method === 'POST' && (url.pathname === '/session/reset' || url.pathname === '/api/igo/session/reset')) {
-      if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
-        return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
-      }
+    if (request.method === 'POST' && url.pathname === '/api/igo/session/reset') {
       if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
       await getSessionStore(env).clearSession();
-      return json({ ok: true, message: 'Kayıtlı iGO oturumu temizlendi.' });
+      return json({ ok: true });
     }
 
-    if (request.method !== 'POST' || !['/query', '/test', '/api/igo/query'].includes(url.pathname)) {
-      return json({ ok: false, error: 'Endpoint bulunamadı.' }, 404);
-    }
+    if (request.method !== 'POST' || url.pathname !== '/api/igo/query') return notFound();
 
-    if (!env.BROWSER) return json({ ok: false, error: 'BROWSER binding tanımlı değil.' }, 503);
-    if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
-    if (!env.IGO_USERNAME || !env.IGO_PASSWORD || !env.TEST_API_KEY) {
-      return json({ ok: false, error: 'IGO_USERNAME, IGO_PASSWORD veya TEST_API_KEY secret eksik.' }, 503);
-    }
-    if (request.headers.get('Authorization') !== `Bearer ${env.TEST_API_KEY}`) {
-      return json({ ok: false, error: 'Erişim anahtarı geçersiz.' }, 401);
+    if (!env.BROWSER || !env.IGO_SESSION_STORE || !env.IGO_USERNAME || !env.IGO_PASSWORD) {
+      return json({ ok: false, error: 'Servis hazır değil.' }, 503);
     }
 
     let input;

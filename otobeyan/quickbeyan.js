@@ -75,8 +75,8 @@ function installUi() {
     <div id="otobeyanOverlay" aria-hidden="true">
     <section id="otobeyanPanel" role="dialog" aria-modal="true" aria-label="Hızlı Beyan">
       <header class="otobeyan-head">
-        <div><div class="otobeyan-title" id="otobeyanTitle">Hızlı Beyan</div><div class="otobeyan-sub" id="otobeyanStatus">OtoBeyan Worker kontrol ediliyor…</div></div>
-        <div class="otobeyan-actions"><button id="otobeyanIgoLogin" type="button">iGO Oturumu</button><button id="otobeyanClose" type="button">✕</button></div>
+        <div><div class="otobeyan-title" id="otobeyanTitle">Hızlı Beyan</div><div class="otobeyan-sub" id="otobeyanStatus">Bağlantı kontrol ediliyor…</div></div>
+        <div class="otobeyan-actions"><button id="otobeyanIgoLogin" type="button">Oturum</button><button id="otobeyanClose" type="button">✕</button></div>
       </header>
       <div id="otobeyanMessages"></div>
       <footer id="otobeyanLiveSummary" aria-live="polite"></footer>
@@ -123,6 +123,7 @@ function setSearchStatus(message, type = 'bot') {
 }
 
 async function startQuickBeyan(rowIndex, triggerButton) {
+  if (!globalThis.OtoBeyanApi?.isUnlocked?.()) return;
   if (state.busy) return;
   const appState = getMainState();
   const row = Array.isArray(appState?.rows) ? appState.rows[rowIndex] : null;
@@ -182,6 +183,7 @@ async function startQuickBeyan(rowIndex, triggerButton) {
 }
 
 function addQuickButtons() {
+  if (!globalThis.OtoBeyanApi?.isUnlocked?.()) return;
   const appState = getMainState();
   const rows = Array.isArray(appState?.rows) ? appState.rows : [];
   rows.forEach((row, rowIndex) => {
@@ -233,22 +235,18 @@ async function checkIgoConnectivity() {
   const status = document.getElementById('otobeyanStatus');
   try {
     const health = await globalThis.OtoBeyanApi?.health?.();
-    if (health && (!health.usernameSecret || !health.passwordSecret)) {
-      status.textContent = 'Worker’da IGO_USERNAME / IGO_PASSWORD secret eksik';
-      return;
-    }
-    if (health?.browserBinding && health?.sessionStoreBinding) {
-      status.textContent = health.sessionCached
-        ? 'OtoBeyan Worker · iGO oturumu hazır'
-        : 'OtoBeyan Worker hazır · ilk sorguda iGO girişi gerekir';
+    if (health?.ok && health?.ready) {
+      status.textContent = health.sessionReady
+        ? 'Bağlantı hazır'
+        : 'İlk sorguda oturum onayı gerekebilir';
       return;
     }
   } catch (_) {}
-  status.textContent = 'OtoBeyan Worker bağlantısı kurulamadı';
+  status.textContent = 'Bağlantı kurulamadı';
 }
 
 async function openIgoLogin() {
-  addMessage('iGO girişi gerekiyorsa ilk Load Sheet sorgusunda güvenli Live View bağlantısı açılacak. Oturum Worker’da saklandığı için sonraki sorgularda tekrar CAPTCHA istenmez.', 'bot');
+  addMessage('Oturum gerekiyorsa ilk sorguda güvenli onay bağlantısı açılır. Sonraki sorgularda kayıtlı oturum kullanılır.', 'bot');
 }
 
 async function searchCrewMail(context) {
@@ -271,7 +269,6 @@ async function searchCrewMail(context) {
       renderCrewEditor(parsed.crews, `Mail GenDec · ${pdf.fileName}`);
       return parsed.crews;
     } catch (error) {
-      console.warn('[OtoBeyan] GenDec alınamadı:', error);
       addMessage('GenDec bulunamadı veya okunamadı. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
       if (!state.crews.length) {
         renderCrewEditor([{ sourceTypeCode: 'MANUEL', crewTypeCode: 'CA' }], 'Manuel ekip');
@@ -375,7 +372,7 @@ async function runIgoQuery(context) {
         flightDate: context.flightDate
       }, event => {
         if (event.type === 'captcha' && event.liveViewUrl) {
-          const message = addMessage(event.message || 'iGO kullanıcı bilgileri otomatik dolduruldu; yalnız CAPTCHA onayı gerekiyor.', 'bot');
+          const message = addMessage('Oturum onayı gerekiyor.', 'bot');
           const link = document.createElement('a');
           link.href = event.liveViewUrl;
           link.target = '_blank';
@@ -396,7 +393,6 @@ async function runIgoQuery(context) {
       try { liveViewWindow?.close?.(); } catch (_) {}
       window.focus();
     } catch (error) {
-      console.warn('[OtoBeyan] Load Sheet alınamadı:', error);
       addMessage('Load Sheet bulunamadı veya okunamadı. Yolcu ve yakıtı elle girebilirsin.', 'error');
     } finally {
       setBusy(false);
@@ -711,4 +707,18 @@ async function confirmOpenAndDeclare() {
   }
 }
 
-installUi();
+function lockQuickBeyanUi() {
+  document.querySelectorAll('[data-otobeyan-quick]').forEach(element => element.remove());
+  closePanel();
+}
+
+globalThis.OtoBeyanUi = Object.freeze({
+  refresh: () => {
+    if (!globalThis.OtoBeyanApi?.isUnlocked?.()) return;
+    installUi();
+    addQuickButtons();
+  },
+  lock: lockQuickBeyanUi
+});
+
+if (globalThis.OtoBeyanApi?.isUnlocked?.()) installUi();

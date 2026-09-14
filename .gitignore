@@ -2,3 +2,12 @@ yulcaribe-main/index.html
 /.codex-remote-attachments
 10.09.2026 DAILY.xlsx
 .DS_Store
+
+# Local secrets and Cloudflare development state
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+**/.wrangler/
+**/node_modules/

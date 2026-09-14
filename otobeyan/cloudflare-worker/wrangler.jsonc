@@ -5,6 +5,19 @@
   "compatibility_date": "2026-09-14",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "secrets": {
+    "required": ["IGO_USERNAME", "IGO_PASSWORD", "EWS_USERNAME", "EWS_PASSWORD", "TEST_API_KEY"]
+  },
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "472901",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
+    }
+  ],
   "browser": {
     "binding": "BROWSER"
   },

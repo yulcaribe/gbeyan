@@ -324,11 +324,13 @@ function fileResponse(bytes, name, extraHeaders = {}) {
   } });
 }
 const cors = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'null',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
-  'Cache-Control': 'no-store'
+  'Cache-Control': 'no-store',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer'
 };
 function json(data, status = 200) { return Response.json(data, { status, headers: cors }); }
 
@@ -386,14 +388,6 @@ export default {
     const url = new URL(request.url);
     const route = url.pathname.replace(/^\/api\/mail(?=\/|$)/, '/api');
     try {
-      if (route === '/api/health') return json({
-        ok: true,
-        version: 'v2.0.0',
-        protocol: 'Exchange ActiveSync 14.1',
-        folder: TARGET_FOLDER_PATH.join('\\'),
-        lookbackHours: DEFAULT_LOOKBACK_HOURS,
-        credentialsConfigured: Boolean(env.EWS_USERNAME && env.EWS_PASSWORD)
-      });
       if (!env.EWS_USERNAME || !env.EWS_PASSWORD || !env.TEST_API_KEY) {
         return json({ error: 'EWS_USERNAME, EWS_PASSWORD veya TEST_API_KEY secret eksik.' }, 503);
       }

@@ -1,23 +1,24 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
+  let accessCode = '';
+
   function config() {
     const value = global.OTOBEYAN_CONFIG || {};
     return {
       workerUrl: String(value.workerUrl || '').replace(/\/+$/, ''),
-      accessCode: String(value.accessCode || ''),
       mailLookbackHours: 6
     };
   }
 
   function endpoint(path) {
     const { workerUrl } = config();
-    if (!workerUrl) throw new Error('OtoBeyan Worker adresi tanımlı değil.');
+    if (!workerUrl) throw new Error('Servis adresi tanımlı değil.');
     return `${workerUrl}${path}`;
   }
 
   function headers(extra = {}) {
-    const { accessCode } = config();
+    if (!accessCode) throw new Error('Erişim anahtarı gerekli.');
     return {
       Authorization: `Bearer ${accessCode}`,
       ...extra
@@ -26,7 +27,7 @@
 
   async function readError(response) {
     const body = await response.json().catch(() => ({}));
-    return body.error || `OtoBeyan Worker HTTP ${response.status}`;
+    return body.error || `Servis HTTP ${response.status}`;
   }
 
   async function jsonRequest(path, options = {}) {
@@ -39,8 +40,32 @@
     return response.json();
   }
 
+  function setAccessCode(value) {
+    accessCode = String(value || '').trim();
+  }
+
+  function clearAccessCode() {
+    accessCode = '';
+  }
+
+  function isUnlocked() {
+    return Boolean(accessCode);
+  }
+
+  async function verifyAccess(value) {
+    const candidate = String(value || '').trim();
+    if (!candidate) throw new Error('Erişim anahtarını gir.');
+    setAccessCode(candidate);
+    try {
+      return await jsonRequest('/api/auth/verify');
+    } catch (error) {
+      clearAccessCode();
+      throw error;
+    }
+  }
+
   async function health() {
-    return jsonRequest('/health');
+    return jsonRequest('/api/auth/verify');
   }
 
   async function syncMail() {
@@ -123,6 +148,10 @@
   }
 
   global.OtoBeyanApi = Object.freeze({
+    setAccessCode,
+    clearAccessCode,
+    isUnlocked,
+    verifyAccess,
     health,
     syncMail,
     recentMail,
