@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.6.0d';
+const QUICKBEYAN_VERSION = '1.6.0e';
 
 const state = {
   busy: false,
@@ -8,7 +8,8 @@ const state = {
   actionPanel: null,
   crewPanel: null,
   igoPanel: null,
-  searchPanel: null
+  searchPanel: null,
+  jobs: new Map()
 };
 
 const HGBS_CREW_TYPES = {
@@ -63,8 +64,9 @@ function installStyles() {
     .otobeyan-quick-btn{margin-top:5px;border:1px solid #2563eb;border-radius:7px;background:#eff6ff;color:#1d4ed8;padding:6px 9px;font:800 11px/1.1 inherit;cursor:pointer;white-space:nowrap}.otobeyan-quick-btn:hover{background:#dbeafe}.otobeyan-quick-btn:disabled{opacity:.55;cursor:wait}.otobeyan-card{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:4px}.otobeyan-card>div{display:grid;gap:1px;padding:4px 7px;border:1px solid #dbe3ee;border-radius:6px;background:#fff}.otobeyan-card span:first-child{color:#64748b;font-size:8px;text-transform:uppercase}.otobeyan-pill{display:inline-block;margin-top:4px;padding:2px 6px;border-radius:999px;background:#dcfce7;color:#166534;font-size:9px;font-weight:800}
     .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:2px;margin-top:4px;overflow-x:auto}.otobeyan-crew-row,.otobeyan-crew-columns{display:grid;grid-template-columns:26px minmax(118px,1.1fr) minmax(100px,1.1fr) minmax(110px,1.1fr) 58px 112px 70px minmax(125px,1.25fr) 28px;gap:4px;align-items:center;min-width:0}.otobeyan-crew-columns{padding:0 4px;color:#64748b;font-size:8px;font-weight:800;text-transform:uppercase}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:6px;padding:3px;background:#f8fafc}.otobeyan-crew-no{text-align:center;font-weight:800;color:#475569}.otobeyan-crew-field{min-width:0}.otobeyan-crew-field span{display:none}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;height:27px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:5px;background:#fff;padding:3px 5px;font:11px inherit;color:#0f172a}.otobeyan-remove-crew{border:0;background:#fee2e2;color:#991b1b;border-radius:5px;width:26px;height:25px;padding:0;cursor:pointer}.otobeyan-source-arrow{font-size:9px;color:#64748b;margin-top:3px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;padding:6px 9px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:repeat(4,minmax(115px,1fr)) auto;gap:6px;margin-top:4px;align-items:end}.otobeyan-review label{display:flex;flex-direction:column;gap:2px;font-size:8px;text-transform:uppercase;color:#64748b;font-weight:800}.otobeyan-review .otobeyan-inline-actions{margin:0;flex-wrap:nowrap}
     #otobeyanLiveSummary{padding:7px 12px;border-top:1px solid #cbd5e1;background:#eef2ff;color:#172554}.otobeyan-summary-main{font-size:12px;font-weight:900;letter-spacing:.01em}.otobeyan-summary-extra{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}.otobeyan-summary-chip{padding:2px 6px;border:1px solid #c7d2fe;border-radius:999px;background:#fff;font-size:9px;font-weight:800;color:#3730a3}
+    #otobeyanJobStack{position:fixed;right:18px;bottom:18px;z-index:2600;width:min(370px,calc(100vw - 24px));display:flex;flex-direction:column-reverse;gap:10px;pointer-events:none}.otobeyan-job{pointer-events:auto;overflow:hidden;border:1px solid #ffffff90;border-radius:16px;background:#fffffff2;color:#0f172a;box-shadow:0 18px 50px #0f172a35;backdrop-filter:blur(18px) saturate(1.25);animation:otobeyanJobIn .28s cubic-bezier(.2,.8,.2,1)}.otobeyan-job-head{display:flex;align-items:center;gap:10px;padding:11px 12px 7px}.otobeyan-job-icon{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:#dbeafe;color:#1d4ed8;font-size:17px}.otobeyan-job-title{min-width:0;flex:1}.otobeyan-job-title strong{display:block;font-size:13px}.otobeyan-job-title span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;color:#64748b;font-size:10px}.otobeyan-job-close{display:none;border:0;background:transparent;color:#64748b;font:18px/1 inherit;cursor:pointer}.otobeyan-job-status{padding:0 12px 9px;font-size:11px;font-weight:700}.otobeyan-job-track{height:3px;background:#e2e8f0}.otobeyan-job-bar{height:100%;width:8%;background:linear-gradient(90deg,#2563eb,#60a5fa);transition:width .3s ease}.otobeyan-job-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:8px 10px 10px}.otobeyan-job-step{text-align:center;color:#94a3b8;font-size:8px;font-weight:800}.otobeyan-job-step::before{content:'';display:block;width:7px;height:7px;margin:0 auto 3px;border-radius:50%;background:#cbd5e1}.otobeyan-job-step.done,.otobeyan-job-step.current{color:#1d4ed8}.otobeyan-job-step.done::before{background:#22c55e}.otobeyan-job-step.current::before{background:#2563eb;box-shadow:0 0 0 4px #dbeafe}.otobeyan-job.success .otobeyan-job-icon{background:#dcfce7;color:#15803d}.otobeyan-job.success .otobeyan-job-bar{background:#22c55e}.otobeyan-job.success .otobeyan-job-status{color:#166534}.otobeyan-job.error .otobeyan-job-icon{background:#fee2e2;color:#b91c1c}.otobeyan-job.error .otobeyan-job-bar{background:#ef4444}.otobeyan-job.error .otobeyan-job-status{color:#991b1b}.otobeyan-job.success .otobeyan-job-close,.otobeyan-job.error .otobeyan-job-close{display:block}@keyframes otobeyanJobIn{from{opacity:0;transform:translateX(28px) scale(.97)}to{opacity:1;transform:none}}
     @media(max-width:1000px){.otobeyan-crew-row,.otobeyan-crew-columns{grid-template-columns:26px 118px 100px 110px 58px 112px 70px 125px 28px;min-width:780px}.otobeyan-review{grid-template-columns:repeat(2,minmax(130px,1fr))}.otobeyan-review .otobeyan-inline-actions{grid-column:1/-1}}
-    @media(max-width:720px){#otobeyanOverlay{padding:0}#otobeyanPanel{width:100%;height:100dvh;border-radius:0}.otobeyan-head{padding:8px 10px}.otobeyan-card{grid-template-columns:repeat(2,minmax(0,1fr))}#otobeyanLiveSummary{padding:6px 8px}}
+    @media(max-width:720px){#otobeyanOverlay{padding:0}#otobeyanPanel{width:100%;height:100dvh;border-radius:0}.otobeyan-head{padding:8px 10px}.otobeyan-card{grid-template-columns:repeat(2,minmax(0,1fr))}#otobeyanLiveSummary{padding:6px 8px}#otobeyanJobStack{right:12px;bottom:12px}}
     @media(max-height:760px) and (min-width:721px){#otobeyanPanel{height:calc(100dvh - 8px)}.otobeyan-head{padding:7px 12px}#otobeyanMessages{padding:5px}.otobeyan-message{padding:4px 6px}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{height:25px}.otobeyan-crew-row{padding:2px}#otobeyanLiveSummary{padding:5px 10px}}
   `;
   document.head.appendChild(style);
@@ -82,7 +84,8 @@ function installUi() {
       </header>
       <div id="otobeyanMessages"></div>
       <footer id="otobeyanLiveSummary" aria-live="polite"></footer>
-    </section></div>`);
+    </section></div>
+    <aside id="otobeyanJobStack" aria-live="polite" aria-label="Beyan işlemleri"></aside>`);
 
   document.getElementById('otobeyanClose').addEventListener('click', closePanel);
   document.getElementById('otobeyanOverlay').addEventListener('click', event => {
@@ -231,6 +234,73 @@ function addMessage(content, type = 'bot', html = false) {
 
 function setBusy(busy) {
   state.busy = busy;
+}
+
+function jobKey(context) {
+  return [context?.flightDate, context?.flightNumber, context?.departurePortCode, context?.arrivalPortCode].join('|');
+}
+
+function createJobNotification(job) {
+  const stack = document.getElementById('otobeyanJobStack');
+  if (!stack) return null;
+  const card = document.createElement('article');
+  card.className = 'otobeyan-job';
+  card.dataset.jobKey = job.key;
+  card.innerHTML = `
+    <div class="otobeyan-job-head">
+      <div class="otobeyan-job-icon" aria-hidden="true">↗</div>
+      <div class="otobeyan-job-title"><strong>${escapeHtml(job.context.flightNumber)} beyanı</strong><span>${escapeHtml(job.context.departurePortCode)} → ${escapeHtml(job.context.arrivalPortCode)} · ${escapeHtml(summaryDate(job.context.flightDate))}</span></div>
+      <button class="otobeyan-job-close" type="button" title="Bildirimi kapat" aria-label="Bildirimi kapat">×</button>
+    </div>
+    <div class="otobeyan-job-status">İşlem hazırlanıyor…</div>
+    <div class="otobeyan-job-track"><div class="otobeyan-job-bar"></div></div>
+    <div class="otobeyan-job-steps">
+      <span class="otobeyan-job-step" data-job-step="flight">Uçuş</span>
+      <span class="otobeyan-job-step" data-job-step="crew">Ekip</span>
+      <span class="otobeyan-job-step" data-job-step="declaration">Yolcu/Yakıt</span>
+      <span class="otobeyan-job-step" data-job-step="customs">Gümrük</span>
+    </div>`;
+  card.querySelector('.otobeyan-job-close').addEventListener('click', () => card.remove());
+  stack.appendChild(card);
+  job.notification = card;
+  return card;
+}
+
+function updateJobNotification(job, stage, message, outcome = 'running') {
+  const card = job.notification;
+  if (!card?.isConnected) return;
+  const stages = ['flight', 'crew', 'declaration', 'customs'];
+  const stageIndex = Math.max(0, stages.indexOf(stage));
+  card.classList.toggle('success', outcome === 'success');
+  card.classList.toggle('error', outcome === 'error');
+  card.querySelector('.otobeyan-job-status').textContent = message;
+  card.querySelector('.otobeyan-job-icon').textContent = outcome === 'success' ? '✓' : outcome === 'error' ? '!' : '↗';
+  card.querySelector('.otobeyan-job-bar').style.width = outcome === 'success' || outcome === 'error'
+    ? '100%'
+    : `${[12, 38, 68, 90][stageIndex]}%`;
+  card.querySelectorAll('[data-job-step]').forEach((step, index) => {
+    step.classList.toggle('done', outcome === 'success' || index < stageIndex);
+    step.classList.toggle('current', outcome === 'running' && index === stageIndex);
+  });
+}
+
+function revealRunningJob(job) {
+  const card = job?.notification;
+  if (!card?.isConnected) return;
+  card.animate?.(
+    [{ transform: 'translateX(0)' }, { transform: 'translateX(-8px)' }, { transform: 'translateX(0)' }],
+    { duration: 260, easing: 'ease-out' }
+  );
+}
+
+function finishJob(job, outcome, message) {
+  updateJobNotification(job, 'customs', message, outcome);
+  state.jobs.delete(job.key);
+  if (outcome === 'success') {
+    window.setTimeout(() => {
+      if (job.notification?.classList.contains('success')) job.notification.remove();
+    }, 15000);
+  }
 }
 
 async function checkIgoConnectivity() {
@@ -448,8 +518,8 @@ function getMainFunction(name) {
   }
 }
 
-function getCaptainName() {
-  const captain = state.crews.find(crew => String(crew.crewTypeCode).toUpperCase() === 'CP');
+function getCaptainName(crews = state.crews) {
+  const captain = crews.find(crew => String(crew.crewTypeCode).toUpperCase() === 'CP');
   return captain ? `${captain.name || ''} ${captain.surname || ''}`.trim() : '';
 }
 
@@ -520,12 +590,14 @@ function renderActionPanel() {
         <button class="otobeyan-btn success" type="button" data-open-declare ${combinedReady ? '' : 'disabled'}>Aç + Beyan Et</button>
       </div>
     </div>
-    ${combinedReady ? '<div class="otobeyan-source-arrow">İkinci seçenek ekip + yolcu + infant + yakıtı kaydeder ve gümrüğe sunar. Son onay HGBS uçuş penceresinde verilir.</div>' : '<div class="otobeyan-source-arrow">Aç + Beyan Et için önce ekip PDF bulunmalı veya yüklenmeli.</div>'}`;
+    ${combinedReady ? '<div class="otobeyan-source-arrow">Aç + Beyan Et bu ekrandaki tek onaydır; işlem sağ alttaki bildirimden takip edilir.</div>' : '<div class="otobeyan-source-arrow">Aç + Beyan Et için önce ekip PDF bulunmalı veya yüklenmeli.</div>'}`;
   message.querySelectorAll('[data-declaration]').forEach(control => {
     control.addEventListener('input', () => updateDeclarationValue(control.dataset.declaration, control.value));
   });
   message.querySelector('[data-open-only]').addEventListener('click', () => openFlightConfirmation(false));
-  message.querySelector('[data-open-declare]').addEventListener('click', () => openFlightConfirmation(true));
+  message.querySelector('[data-open-declare]').addEventListener('click', event => {
+    void openFlightConfirmation(true, event.currentTarget);
+  });
   state.actionPanel = message;
   renderLiveSummary();
 }
@@ -550,10 +622,11 @@ function prefillFlightModal() {
   getMainFunction('updateModalPreview')?.();
 }
 
-function openFlightConfirmation(withDeclaration) {
+async function openFlightConfirmation(withDeclaration, triggerButton = null) {
   const context = state.lastContext;
   const openModal = getMainFunction('openModal');
-  if (!context?.row || context.rowIndex < 0 || !openModal) {
+  const prepareFlightModal = getMainFunction('prepareFlightModal');
+  if (!context?.row || context.rowIndex < 0 || !openModal || (withDeclaration && !prepareFlightModal)) {
     addMessage('Excel uçuş satırı veya HGBS uçuş açma ekranı bulunamadı.', 'error');
     return;
   }
@@ -565,25 +638,57 @@ function openFlightConfirmation(withDeclaration) {
     }
   }
 
-  openModal(context.rowIndex, false);
-  prefillFlightModal();
-  if (!withDeclaration) return;
-
-  const confirmButton = document.getElementById('modalConfirmBtn');
-  if (confirmButton) {
-    confirmButton.textContent = 'Uçuşu Aç + Beyan Et →';
-    confirmButton.onclick = confirmOpenAndDeclare;
+  if (!withDeclaration) {
+    openModal(context.rowIndex, false);
+    prefillFlightModal();
+    return;
   }
-  if (state.igoResult && !state.igoResult.loadSheet?.finalized) {
-    const warning = document.getElementById('modalWarningBanner');
-    if (warning) {
-      warning.style.display = 'block';
-      warning.textContent = '⚠ Uçuş kapanmadı. Bilgiler hazırlanmıştır; devam edersen mevcut değerler beyan edilir.';
-    }
+
+  const key = jobKey(context);
+  const runningJob = state.jobs.get(key);
+  if (runningJob) {
+    closePanel();
+    revealRunningJob(runningJob);
+    return;
+  }
+
+  prepareFlightModal(context.rowIndex, false);
+  prefillFlightModal();
+  const getModalEtaValues = getMainFunction('getModalEtaValues');
+  const validateModalEtaValues = getMainFunction('validateModalEtaValues');
+  const eta = getModalEtaValues?.();
+  const etaValidation = eta && validateModalEtaValues?.(context.row, eta);
+  if (!eta || (etaValidation && !etaValidation.isValid)) {
+    addMessage(etaValidation?.message || 'Uçuş saat bilgileri hazırlanamadı.', 'error');
+    return;
+  }
+
+  const job = {
+    key,
+    context: { ...context },
+    crews: state.crews.map(cloneCrew),
+    declaration: { ...(state.declaration || {}) },
+    eta: { ...eta },
+    notification: null
+  };
+  state.jobs.set(key, job);
+  createJobNotification(job);
+  updateJobNotification(
+    job,
+    'flight',
+    state.igoResult && !state.igoResult.loadSheet?.finalized
+      ? 'Uçuş kapanmadı; onaylanan bilgilerle işlem başlatıldı…'
+      : 'Uçuş hazırlanıyor…'
+  );
+  closePanel();
+  try {
+    await confirmOpenAndDeclare(job, triggerButton);
+  } catch (error) {
+    finishJob(job, 'error', `İşlem durdu: ${error?.message || 'Beklenmeyen hata.'}`);
   }
 }
 
-async function buildCrewApiPayload(baseId) {
+async function buildCrewApiPayload(baseId, crews = state.crews) {
   const normalizeType = getMainFunction('normalizeCrewExcelType');
   const normalizeDate = getMainFunction('crewDateForApi');
   const normalizeCode = getMainFunction('normalizeCode');
@@ -592,7 +697,7 @@ async function buildCrewApiPayload(baseId) {
   const normalizeNationality = getMainFunction('normalizeNationality');
   return {
     baseId,
-    crews: state.crews.map(crew => ({
+    crews: crews.map(crew => ({
       id: '',
       crewTypeCode: normalizeType ? normalizeType(crew.crewTypeCode) : String(crew.crewTypeCode || '').toUpperCase(),
       dateOfBirth: normalizeDate ? normalizeDate(crew.dateOfBirth) : crew.dateOfBirth,
@@ -605,50 +710,35 @@ async function buildCrewApiPayload(baseId) {
   };
 }
 
-async function confirmOpenAndDeclare() {
-  const context = state.lastContext;
+async function confirmOpenAndDeclare(job, triggerButton = null) {
+  const context = job.context;
   const row = context?.row;
   const apiCall = getMainFunction('apiCall');
-  const getModalEtaValues = getMainFunction('getModalEtaValues');
-  const validateModalEtaValues = getMainFunction('validateModalEtaValues');
   const buildPayload = getMainFunction('buildPayload');
   const getRowApiId = getMainFunction('getRowApiId');
   const buildHvbPayload = getMainFunction('buildHvbPayload');
   const hvbDefaultState = getMainFunction('hvbDefaultState');
   const hvbPopulateStateFromApi = getMainFunction('hvbPopulateStateFromApi');
-  const closeModal = getMainFunction('closeModal');
   const refreshRows = getMainFunction('refreshRowsAfterHGBSAction');
   const updateRow = getMainFunction('updateRow');
   const markAsSent = getMainFunction('markAsSent');
-  const setModalStatus = getMainFunction('setModalStatus');
-  const button = document.getElementById('modalConfirmBtn');
+  const button = triggerButton || document.getElementById('modalConfirmBtn');
+  const originalButtonText = button?.textContent || 'Aç + Beyan Et';
 
-  if (!row || !apiCall || !getModalEtaValues || !buildPayload || !buildHvbPayload || !hvbDefaultState) {
-    addMessage('HGBS işlem fonksiyonları hazır değil. Sayfayı yenileyip tekrar dene.', 'error');
-    return;
-  }
-  const crewError = validateCrewDraft();
-  if (crewError) {
-    setModalStatus?.('error', crewError);
-    return;
-  }
-  const eta = getModalEtaValues();
-  const etaValidation = validateModalEtaValues?.(row, eta);
-  if (etaValidation && !etaValidation.isValid) {
-    setModalStatus?.('error', etaValidation.message);
-    document.getElementById(etaValidation.focusId)?.focus();
-    return;
+  if (!row || !apiCall || !job.eta || !buildPayload || !buildHvbPayload || !hvbDefaultState) {
+    finishJob(job, 'error', 'HGBS işlem bileşenleri hazır değil. Sayfayı yenileyip tekrar dene.');
+    return false;
   }
 
   if (button) {
     button.disabled = true;
     button.textContent = 'Uçuş hazırlanıyor…';
   }
-  setModalStatus?.('info', 'Uçuş, ekip ve hava yolu beyanı sırayla gönderiliyor…');
 
   try {
-    const crewCount = state.crews.length;
-    const captainName = getCaptainName();
+    const crewCount = job.crews.length;
+    const captainName = getCaptainName(job.crews);
+    const eta = job.eta;
     let baseId = getRowApiId?.(row) || '';
 
     if (!baseId) {
@@ -663,9 +753,11 @@ async function confirmOpenAndDeclare() {
       updateRow?.(context.rowIndex);
     }
 
+    updateJobNotification(job, 'crew', baseId ? 'Uçuş hazır. Ekip gönderiliyor…' : 'Ekip gönderiliyor…');
     if (button) button.textContent = 'Ekip gönderiliyor…';
-    await apiCall('PUT', '/api/Flight/SetCrews?api-version=1.0', await buildCrewApiPayload(baseId));
+    await apiCall('PUT', '/api/Flight/SetCrews?api-version=1.0', await buildCrewApiPayload(baseId, job.crews));
 
+    updateJobNotification(job, 'declaration', 'Ekip kaydedildi. Yolcu ve yakıt gönderiliyor…');
     if (button) button.textContent = 'Yolcu / yakıt gönderiliyor…';
     const flightResponse = await apiCall('GET', `/api/Flight/GetFlight?baseId=${encodeURIComponent(baseId)}&api-version=1.0`);
     const flightDetail = flightResponse?.data || flightResponse;
@@ -681,7 +773,7 @@ async function confirmOpenAndDeclare() {
     const airState = hvbPopulateStateFromApi
       ? hvbPopulateStateFromApi(hvbDefaultState(), existingAirDec)
       : hvbDefaultState();
-    const declaration = state.declaration || {};
+    const declaration = job.declaration || {};
     const pax = Math.max(0, Number(declaration.pax) || 0);
     const infant = Math.max(0, Number(declaration.infant) || 0);
     const fuel = Math.max(0, Number(declaration.fuel) || 0);
@@ -696,6 +788,7 @@ async function confirmOpenAndDeclare() {
     const airPayload = buildHvbPayload(flightDetail, baseId, airState, existingAirDec);
     await apiCall('PUT', '/api/Flight/SetAirDec?api-version=1.0', airPayload);
 
+    updateJobNotification(job, 'customs', 'Bilgiler kaydedildi. Gümrüğe sunuluyor…');
     if (button) button.textContent = 'Gümrüğe sunuluyor…';
     await apiCall('POST', '/api/AirBase/StatusActionAgency?api-version=1.0', {
       id: baseId,
@@ -703,16 +796,24 @@ async function confirmOpenAndDeclare() {
       actionComment: '-'
     });
 
-    closeModal?.();
-    addMessage(`${row.flightNo}: uçuş açıldı, ${crewCount} ekip ile yolcu/yakıt kaydedildi ve gümrüğe sunuldu.`, 'success');
-    await refreshRows?.();
+    finishJob(job, 'success', `Tamamlandı: ${crewCount} ekip, yolcu ve yakıt kaydedilip gümrüğe sunuldu.`);
+    try {
+      await refreshRows?.();
+    } catch (_) {
+      // Beyan tamamlandı; yalnızca tablo yenilemesi başarısızsa sonucu hataya çevirmeyiz.
+    }
+    if (button) {
+      button.disabled = true;
+      button.textContent = '✓ Beyan Edildi';
+    }
+    return true;
   } catch (error) {
-    setModalStatus?.('error', error.message);
-    addMessage(`HGBS işlemi durdu: ${error.message}`, 'error');
+    finishJob(job, 'error', `İşlem durdu: ${error.message}`);
     if (button) {
       button.disabled = false;
-      button.textContent = 'Tekrar Dene: Uçuşu Aç + Beyan Et →';
+      button.textContent = originalButtonText;
     }
+    return false;
   }
 }
 

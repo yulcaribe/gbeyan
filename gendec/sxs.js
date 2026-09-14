@@ -1,5 +1,5 @@
 /*
- * Version: v1.6.0d
+ * Version: v1.6.0e
  * SXS / SunExpress GENDEC parser.
  * Şimdilik özel SXS formatı eklenmediği için generic parsera bırakılır.
  * SXS'e özel PDF örneği netleşince bu fonksiyon dolacak.

@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.6.0d';
+  const CLIENT_VERSION = '1.6.0e';
   let accessCode = '';
 
   function config() {
