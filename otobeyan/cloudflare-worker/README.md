@@ -58,7 +58,9 @@ mail ve iGO endpointleri `Authorization: Bearer <TEST_API_KEY>` ister.
 Cron Trigger beş dakikada bir çalışır. Mesaj listesi ortak Durable Object içinde
 tutulur. Aynı cron, kayıtlı iGO oturumu hâlâ geçerliyse AYT kalkış listesindeki
 oluşmuş Load Sheet'lerin son EDNO'sunu, imza durumundan bağımsız olarak JSON
-cache'e yazar. İstemci önce bu JSON endpoint'ini kullanır, taze kayıt yoksa
+cache'e yazar. Grid birden fazla sayfaysa önce `All` görünümüne geçilir; Load
+Sheet HTML'leri aynı iGO oturumunda sınırlı paralellikle alınır. İstemci önce bu
+JSON endpoint'ini kullanır, taze kayıt yoksa
 mevcut canlı Browser Rendering sorgusuna geri döner. `(Digitally Signed)` olmayan
 Load Sheet de modalı doldurur; kullanıcıya yalnız `Uçuş kapanmadı` uyarısı gösterilir.
 

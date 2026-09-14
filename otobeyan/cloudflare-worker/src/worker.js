@@ -384,6 +384,72 @@ async function readGridRows(page) {
   });
 }
 
+async function expandGridToAllRows(page) {
+  const initialCount = await page.locator('tr[id*="_DXDataRow"]').count();
+  const allRowsButton = page.locator('a[onclick*="PBA"]').first();
+  if (await allRowsButton.count() === 0) return { expanded: false, rowCount: initialCount };
+
+  await allRowsButton.click();
+  await page.waitForFunction(({ before }) => {
+    const grid = globalThis.grd || globalThis.ASPx?.GetControlCollection?.().Get('ctl00_ContentMain_grd');
+    const callbackBusy = typeof grid?.InCallback === 'function' && grid.InCallback();
+    const rowCount = document.querySelectorAll('tr[id*="_DXDataRow"]').length;
+    return !callbackBusy && rowCount > before;
+  }, { before: initialCount }, { timeout: 60_000 });
+
+  return {
+    expanded: true,
+    rowCount: await page.locator('tr[id*="_DXDataRow"]').count()
+  };
+}
+
+async function fetchLoadSheetTexts(page, rows) {
+  const requests = rows.map(row => ({ wbMainId: String(row.wbMainId) }));
+  return page.evaluate(async items => {
+    const results = new Array(items.length);
+    let cursor = 0;
+
+    async function fetchNext() {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        const item = items[index];
+        const sourceUrl = `/WB/pgWBPrint.aspx?ID=${encodeURIComponent(item.wbMainId)}&MODE=LS`;
+        try {
+          const response = await fetch(sourceUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: { Accept: 'text/html,application/xhtml+xml' }
+          });
+          const html = await response.text();
+          const documentCopy = new DOMParser().parseFromString(html, 'text/html');
+          const loadSheetText = documentCopy.querySelector('#LSText')?.textContent?.trim() || '';
+          results[index] = {
+            wbMainId: item.wbMainId,
+            ok: response.ok && Boolean(loadSheetText),
+            loginRequired: /\/Account\/pgLogin\.aspx/i.test(response.url) || /id=["']ePassword/i.test(html),
+            text: loadSheetText,
+            status: response.status
+          };
+        } catch (error) {
+          results[index] = {
+            wbMainId: item.wbMainId,
+            ok: false,
+            loginRequired: false,
+            text: '',
+            error: String(error?.message || error)
+          };
+        }
+      }
+    }
+
+    const concurrency = Math.min(4, Math.max(1, items.length));
+    await Promise.all(Array.from({ length: concurrency }, () => fetchNext()));
+    return results;
+  }, requests);
+}
+
 async function searchGrid(page, flight, date) {
   return page.evaluate(async args => {
     function cellText(cell) {
@@ -473,6 +539,7 @@ async function refreshLoadSheetCache(env) {
     }
 
     await page.locator('tr[id*="_DXDataRow"]').first().waitFor({ state: 'attached', timeout: 30_000 }).catch(() => {});
+    await expandGridToAllRows(page).catch(() => {});
     const rows = await readGridRows(page);
     const candidates = rows.filter(row =>
       row.wbMainId
@@ -480,14 +547,27 @@ async function refreshLoadSheetCache(env) {
       && String(row.departurePortCode || '').toUpperCase() === 'AYT'
       && normalizeDate(row.flightDate)
     );
+    const loadSheetTexts = await fetchLoadSheetTexts(page, candidates);
+    const textById = new Map(loadSheetTexts.map(item => [String(item.wbMainId), item]));
     let refreshed = 0;
     let waitingForFinal = 0;
+    let failed = 0;
 
     for (const selected of candidates) {
       const flightNumber = normalizeFlightNumber(selected.flightNumber);
       const flightDate = normalizeDate(selected.flightDate);
       try {
-        const loadSheet = await fetchLoadSheet(context, selected);
+        const downloaded = textById.get(String(selected.wbMainId));
+        if (downloaded?.loginRequired) {
+          await store.clearSession();
+          return { skipped: true, reason: 'session-expired', refreshed, waitingForFinal, failed };
+        }
+        if (!downloaded?.ok || !downloaded.text) {
+          failed += 1;
+          continue;
+        }
+        const sourceUrl = `${IGO_ORIGIN}/WB/pgWBPrint.aspx?ID=${encodeURIComponent(selected.wbMainId)}&MODE=LS`;
+        const loadSheet = parseLoadSheet(downloaded.text, sourceUrl);
         if (!loadSheet.finalized) waitingForFinal += 1;
         await store.saveLoadSheet({
           status: 'ready',
@@ -499,13 +579,14 @@ async function refreshLoadSheetCache(env) {
       } catch (error) {
         if (/oturumu sona erdi/i.test(String(error?.message || error))) {
           await store.clearSession();
-          return { skipped: true, reason: 'session-expired', refreshed, waitingForFinal };
+          return { skipped: true, reason: 'session-expired', refreshed, waitingForFinal, failed };
         }
+        failed += 1;
       }
     }
 
     await saveSessionState(env, context);
-    return { skipped: false, found: candidates.length, refreshed, waitingForFinal };
+    return { skipped: false, found: candidates.length, refreshed, waitingForFinal, failed };
   } finally {
     await context?.close().catch(() => {});
     await browser.close().catch(() => {});
