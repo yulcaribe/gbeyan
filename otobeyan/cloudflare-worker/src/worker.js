@@ -1,6 +1,7 @@
 // OtoBeyan iGO Browser Run POC
 // Bu dosya Cloudflare Workers Builds tarafından package.json ile bundle edilir.
 // Browser binding adı: BROWSER
+// Cloudflare Git build tetikleyicisi.
 // Gerekli Worker Secret'ları: IGO_USERNAME, IGO_PASSWORD, TEST_API_KEY
 // CAPTCHA otomatik çözülmez; kullanıcı Live View ekranında kendisi tamamlar.
 
