@@ -7,7 +7,8 @@ const state = {
   igoResult: null,
   actionPanel: null,
   crewPanel: null,
-  igoPanel: null
+  igoPanel: null,
+  searchPanel: null
 };
 
 const HGBS_CREW_TYPES = {
@@ -112,11 +113,12 @@ function installStyles() {
   style.id = 'otobeyanStyles';
   style.textContent = `
     #otobeyanOverlay{position:fixed;inset:0;z-index:2300;display:none;place-items:center;padding:22px;background:#0f172a99;backdrop-filter:blur(2px)}
-    #otobeyanOverlay.open{display:grid}#otobeyanPanel{width:min(980px,calc(100vw - 28px));height:min(760px,calc(100vh - 28px));display:grid;grid-template-rows:auto 1fr;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 22px 70px #0f172a66;overflow:hidden}
+    #otobeyanOverlay.open{display:grid}#otobeyanPanel{width:min(980px,calc(100vw - 28px));height:min(760px,calc(100vh - 28px));display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 22px 70px #0f172a66;overflow:hidden}
     .otobeyan-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;background:#172554;color:#fff}.otobeyan-title{font-size:17px;font-weight:800}.otobeyan-sub{font-size:11px;color:#c7d2fe;margin-top:2px}.otobeyan-actions{display:flex;gap:6px}.otobeyan-head button{border:1px solid #ffffff40;background:#ffffff16;color:#fff;border-radius:7px;padding:6px 8px;cursor:pointer}
     #otobeyanMessages{padding:12px;overflow:auto;background:#f8fafc;display:flex;flex-direction:column;gap:6px}.otobeyan-message{width:100%;padding:8px 10px;border-radius:9px;font-size:12px;line-height:1.35;white-space:pre-wrap;background:#fff;border:1px solid #e2e8f0;color:#334155}.otobeyan-message.error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.otobeyan-message.success{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.otobeyan-message strong{font-weight:800}
     .otobeyan-quick-btn{margin-top:5px;border:1px solid #2563eb;border-radius:7px;background:#eff6ff;color:#1d4ed8;padding:6px 9px;font:800 11px/1.1 inherit;cursor:pointer;white-space:nowrap}.otobeyan-quick-btn:hover{background:#dbeafe}.otobeyan-quick-btn:disabled{opacity:.55;cursor:wait}.otobeyan-card{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin-top:6px}.otobeyan-card>div{display:grid;gap:1px;padding:6px 8px;border:1px solid #dbe3ee;border-radius:7px;background:#fff}.otobeyan-card span:first-child{color:#64748b;font-size:9px;text-transform:uppercase}.otobeyan-pill{display:inline-block;margin-top:6px;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:10px;font-weight:800}
     .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:3px;margin-top:6px;overflow-x:auto}.otobeyan-crew-row,.otobeyan-crew-columns{display:grid;grid-template-columns:26px 68px 118px minmax(90px,1fr) minmax(100px,1fr) 52px 104px 62px minmax(110px,1.1fr) 28px;gap:4px;align-items:center;min-width:850px}.otobeyan-crew-columns{padding:0 4px;color:#64748b;font-size:8px;font-weight:800;text-transform:uppercase}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:7px;padding:4px;background:#f8fafc}.otobeyan-crew-no{text-align:center;font-weight:800;color:#475569}.otobeyan-crew-field{min-width:0}.otobeyan-crew-field span{display:none}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;height:29px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:5px;background:#fff;padding:4px 5px;font:11px inherit;color:#0f172a}.otobeyan-remove-crew{border:0;background:#fee2e2;color:#991b1b;border-radius:5px;width:26px;height:26px;padding:0;cursor:pointer}.otobeyan-source-arrow{font-size:9px;color:#64748b;margin-top:3px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;padding:7px 10px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr)) auto;gap:7px;margin-top:6px;align-items:end}.otobeyan-review label{display:flex;flex-direction:column;gap:2px;font-size:8px;text-transform:uppercase;color:#64748b;font-weight:800}.otobeyan-review .otobeyan-inline-actions{margin:0;flex-wrap:nowrap}
+    #otobeyanLiveSummary{padding:10px 14px;border-top:1px solid #cbd5e1;background:#eef2ff;color:#172554}.otobeyan-summary-main{font-size:13px;font-weight:900;letter-spacing:.01em}.otobeyan-summary-extra{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.otobeyan-summary-chip{padding:3px 7px;border:1px solid #c7d2fe;border-radius:999px;background:#fff;font-size:10px;font-weight:800;color:#3730a3}
     @media(max-width:720px){#otobeyanOverlay{padding:8px}#otobeyanPanel{width:100%;height:100%;border-radius:10px}.otobeyan-card{grid-template-columns:repeat(2,minmax(0,1fr))}.otobeyan-review{grid-template-columns:1fr 1fr}.otobeyan-review .otobeyan-inline-actions{grid-column:1/-1}}
   `;
   document.head.appendChild(style);
@@ -133,6 +135,7 @@ function installUi() {
         <div class="otobeyan-actions"><button id="otobeyanIgoLogin" type="button">iGO Oturumu</button><button id="otobeyanClose" type="button">✕</button></div>
       </header>
       <div id="otobeyanMessages"></div>
+      <footer id="otobeyanLiveSummary" aria-live="polite"></footer>
     </section></div>`);
 
   document.getElementById('otobeyanClose').addEventListener('click', closePanel);
@@ -162,9 +165,17 @@ function closePanel() {
 function isQuickBeyanEligible(row, actionCell) {
   const flightNumber = normalizeFlightNumber(row?.flightNo);
   const isSunExpress = flightNumber.startsWith('XQ');
-  const isDeparture = String(row?.type || '').toLocaleUpperCase('tr-TR').includes('GİDİŞ');
   const hasOpenAction = Boolean(actionCell?.querySelector('button[onclick*="openModal("]'));
-  return isSunExpress && isDeparture && hasOpenAction;
+  return isSunExpress && hasOpenAction;
+}
+
+function setSearchStatus(message, type = 'bot') {
+  if (!state.searchPanel?.isConnected) {
+    state.searchPanel = addMessage(message, type);
+    return;
+  }
+  state.searchPanel.className = `otobeyan-message ${type}`;
+  state.searchPanel.textContent = message;
 }
 
 async function startQuickBeyan(rowIndex, triggerButton) {
@@ -180,6 +191,7 @@ async function startQuickBeyan(rowIndex, triggerButton) {
     departurePortCode: row.departureAirport || '',
     arrivalPortCode: row.arrivalAirport || '',
     scheduledTime: row.time || '',
+    isDeparture: String(row.type || '').toLocaleUpperCase('tr-TR').includes('GİDİŞ'),
     rowIndex,
     row
   };
@@ -191,23 +203,32 @@ async function startQuickBeyan(rowIndex, triggerButton) {
   state.lastContext = context;
   state.crews = [];
   state.igoResult = null;
-  state.declaration = null;
+  state.declaration = { pax: 0, infant: 0, fuel: 0, fuelType: 'foreign' };
   clearActionPanel();
   state.crewPanel = null;
   state.igoPanel = null;
+  state.searchPanel = null;
   const messages = document.getElementById('otobeyanMessages');
   if (messages) messages.innerHTML = '';
   const title = document.getElementById('otobeyanTitle');
   if (title) title.textContent = `Hızlı Beyan · ${context.flightNumber}`;
   openPanel();
+  renderLiveSummary();
   if (triggerButton) triggerButton.disabled = true;
 
   try {
-    addMessage('Load Sheet ve son 6 saatteki GenDec aynı anda hazırlanıyor…', 'bot');
+    setSearchStatus('Aranıyor…');
+    renderCrewEditor([], 'Ekip listesi');
+    renderActionPanel();
     const mailPromise = searchCrewMail(context);
-    await runIgoQuery(context);
+    if (context.isDeparture) {
+      await runIgoQuery(context);
+    } else {
+      addMessage('Geliş seferi: yolcu ve yakıt bilgilerini elle gir.', 'bot');
+    }
     await mailPromise;
     renderActionPanel();
+    setSearchStatus('Hazır.', 'success');
   } finally {
     if (triggerButton?.isConnected) triggerButton.disabled = false;
   }
@@ -365,7 +386,6 @@ async function fetchCrewFromConnectedMail(context) {
 
 async function searchCrewMail(context) {
   if (globalThis.OtoBeyanApi?.flightPdf && typeof globalThis.parseCrewPdfFileData === 'function') {
-    addMessage(`${context.flightNumber} için son 6 saatin merkezi GenDec cache’i aranıyor…`, 'bot');
     try {
       const pdf = await globalThis.OtoBeyanApi.flightPdf(context.flightNumber);
       const file = new File([pdf.blob], pdf.fileName || `${context.flightNumber}.pdf`, {
@@ -384,35 +404,18 @@ async function searchCrewMail(context) {
       renderCrewEditor(parsed.crews, `Mail GenDec · ${pdf.fileName}`);
       return parsed.crews;
     } catch (error) {
-      addMessage(`Merkezi GenDec alınamadı: ${error.message}`, 'error');
+      console.warn('[OtoBeyan] GenDec alınamadı:', error);
+      addMessage('GenDec bulunamadı veya okunamadı. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
+      if (!state.crews.length) {
+        renderCrewEditor([{ sourceTypeCode: 'MANUEL', crewTypeCode: 'CA' }], 'Manuel ekip');
+      }
       return null;
     }
   }
 
-  if (!globalThis.BeyanMail?.isConnected?.()) {
-    const message = addMessage('Ekip PDF araması için mail bağlantısı kapalı.', 'bot');
-    const actions = document.createElement('div');
-    actions.className = 'otobeyan-inline-actions';
-    const button = document.createElement('button');
-    button.className = 'otobeyan-btn primary';
-    button.type = 'button';
-    button.textContent = 'Mail Girişi Yap';
-    button.addEventListener('click', openMailLogin);
-    actions.appendChild(button);
-    message.appendChild(actions);
-    return null;
-  }
-
-  addMessage(`${context.flightNumber} / ${context.flightDate} için mailde GenDec aranıyor…`, 'bot');
-  try {
-    const result = await fetchCrewFromConnectedMail(context);
-    if (result.status === 'found') {
-      renderCrewEditor(result.crews, 'Mail GenDec');
-      return result.crews;
-    }
-    addMessage(`Mail araması tamamlandı: ${result.message}`, 'error');
-  } catch (error) {
-    addMessage(`Mail GenDec alınamadı: ${error.message}`, 'error');
+  addMessage('GenDec servisi kullanılamıyor. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
+  if (!state.crews.length) {
+    renderCrewEditor([{ sourceTypeCode: 'MANUEL', crewTypeCode: 'CA' }], 'Manuel ekip');
   }
   return null;
 }
@@ -451,6 +454,7 @@ function bindCrewEditor(editor) {
       const crew = state.crews[Number(control.dataset.crewIndex)];
       if (crew) crew[control.dataset.crewKey] = control.value;
       renderActionPanel();
+      renderLiveSummary();
     });
   });
   editor.querySelectorAll('[data-remove-crew]').forEach(button => {
@@ -462,8 +466,7 @@ function bindCrewEditor(editor) {
 }
 
 function renderCrewEditor(crews, source) {
-  if (!crews?.length) return;
-  state.crews = crews.map(cloneCrew);
+  state.crews = (crews || []).map(cloneCrew);
   state.crewPanel?.remove?.();
   const captain = state.crews.find(crew => crew.crewTypeCode === 'CP');
   const message = addMessage('', 'success');
@@ -493,6 +496,7 @@ function renderCrewEditor(crews, source) {
   });
   state.crewPanel = message;
   renderActionPanel();
+  renderLiveSummary();
 }
 
 async function submitText() {
@@ -532,7 +536,6 @@ async function submitText() {
 async function runIgoQuery(context) {
   setBusy(true);
   if (globalThis.OtoBeyanApi?.queryIgo) {
-    addMessage(`${context.flightNumber} / ${context.flightDate} iGO’da OtoBeyan Worker ile aranıyor…`, 'bot');
     let liveViewWindow = null;
     try {
       const result = await globalThis.OtoBeyanApi.queryIgo({
@@ -561,14 +564,15 @@ async function runIgoQuery(context) {
       try { liveViewWindow?.close?.(); } catch (_) {}
       window.focus();
     } catch (error) {
-      addMessage(error.message, 'error');
+      console.warn('[OtoBeyan] Load Sheet alınamadı:', error);
+      addMessage('Load Sheet bulunamadı veya okunamadı. Yolcu ve yakıtı elle girebilirsin.', 'error');
     } finally {
       setBusy(false);
       checkIgoConnectivity();
     }
     return;
   }
-  addMessage('OtoBeyan Worker istemcisi yüklenmedi. Sayfayı yenileyip tekrar dene.', 'error');
+  addMessage('Load Sheet alınamadı. Yolcu ve yakıtı elle girebilirsin.', 'error');
   setBusy(false);
 }
 
@@ -588,13 +592,13 @@ function renderIgoResult(result) {
       <div><span>OffBlock Fuel</span><strong>${escapeHtml(field('offBlockFuelKg'))} kg</strong></div>
       <div><span>Load Sheet</span><strong>EDNO ${escapeHtml(field('edno'))}</strong></div>
     </div>
-    <span class="otobeyan-pill">${finalized ? '✓ Digitally Signed' : '⚠ Finalize edilmedi'}</span>`;
+    <span class="otobeyan-pill">${finalized ? '✓ Digitally Signed' : '⚠ Uçuş kapanmadı'}</span>`;
   state.igoPanel = addMessage(message, finalized ? 'success' : 'error', true);
   state.declaration = {
     pax: Number(field('pax')) || 0,
     infant: Number(field('infant')) || 0,
     fuel: Number(field('offBlockFuelKg')) || 0,
-    fuelType: 'national'
+    fuelType: 'foreign'
   };
   renderActionPanel();
 }
@@ -612,6 +616,42 @@ function getCaptainName() {
   return captain ? `${captain.name || ''} ${captain.surname || ''}`.trim() : '';
 }
 
+function summaryDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : String(value || '—');
+}
+
+function summaryTime(value) {
+  const match = String(value || '').match(/^(\d{1,2})[:.](\d{2})/);
+  return match ? `${match[1].padStart(2, '0')}.${match[2]}` : String(value || '—');
+}
+
+function renderLiveSummary() {
+  const target = document.getElementById('otobeyanLiveSummary');
+  const context = state.lastContext;
+  if (!target || !context?.row) {
+    if (target) target.innerHTML = '';
+    return;
+  }
+
+  const row = context.row;
+  const isArrival = String(row.type || '').toLocaleUpperCase('tr-TR').includes('GELİŞ');
+  const scheduleLabel = isArrival ? 'STA' : 'STD';
+  const captain = getCaptainName() || 'GİRİLMEDİ';
+  const declaration = state.declaration || { pax: 0, infant: 0, fuel: 0, fuelType: 'foreign' };
+  const fuelType = declaration.fuelType === 'national' ? 'MİLLİ' : 'YABANCI';
+  const route = `${row.departureAirport || '—'} - ${row.arrivalAirport || '—'}`;
+
+  target.innerHTML = `
+    <div class="otobeyan-summary-main">${escapeHtml(context.flightNumber)} / ${escapeHtml(route)} / ${escapeHtml(row.reg || '—')} / ${escapeHtml(summaryDate(context.flightDate))} / ${scheduleLabel}: ${escapeHtml(summaryTime(row.time))} / ${state.crews.length} KİŞİ EKİP</div>
+    <div class="otobeyan-summary-extra">
+      <span class="otobeyan-summary-chip">KAPTAN: ${escapeHtml(captain)}</span>
+      <span class="otobeyan-summary-chip">PAX: ${escapeHtml(declaration.pax)}</span>
+      <span class="otobeyan-summary-chip">INF: ${escapeHtml(declaration.infant)}</span>
+      <span class="otobeyan-summary-chip">YAKIT: ${escapeHtml(declaration.fuel)} KG · ${fuelType}</span>
+    </div>`;
+}
+
 function clearActionPanel() {
   state.actionPanel?.remove?.();
   state.actionPanel = null;
@@ -620,14 +660,15 @@ function clearActionPanel() {
 function updateDeclarationValue(key, value) {
   if (!state.declaration) return;
   state.declaration[key] = key === 'fuelType' ? value : Math.max(0, Number.parseInt(value, 10) || 0);
+  renderLiveSummary();
 }
 
 function renderActionPanel() {
   clearActionPanel();
   const context = state.lastContext;
-  if (!context?.row || !state.igoResult || state.igoResult.status !== 'ready') return;
+  if (!context?.row) return;
 
-  const declaration = state.declaration || { pax: 0, infant: 0, fuel: 0, fuelType: 'national' };
+  const declaration = state.declaration || { pax: 0, infant: 0, fuel: 0, fuelType: 'foreign' };
   const combinedReady = state.crews.length > 0;
   const message = addMessage('', 'bot');
   message.classList.add('otobeyan-wide');
@@ -636,7 +677,7 @@ function renderActionPanel() {
       <label>PAX<input type="number" min="0" data-declaration="pax" value="${escapeHtml(declaration.pax)}"></label>
       <label>INFANT<input type="number" min="0" data-declaration="infant" value="${escapeHtml(declaration.infant)}"></label>
       <label>OffBlock Fuel KG<input type="number" min="0" data-declaration="fuel" value="${escapeHtml(declaration.fuel)}"></label>
-      <label>HGBS Yakıt Alanı<select data-declaration="fuelType"><option value="national"${declaration.fuelType === 'national' ? ' selected' : ''}>Milli</option><option value="foreign"${declaration.fuelType === 'foreign' ? ' selected' : ''}>Yabancı</option></select></label>
+      <label>HGBS Yakıt Alanı<select data-declaration="fuelType"><option value="foreign"${declaration.fuelType === 'foreign' ? ' selected' : ''}>Yabancı</option><option value="national"${declaration.fuelType === 'national' ? ' selected' : ''}>Milli</option></select></label>
       <div class="otobeyan-inline-actions">
         <button class="otobeyan-btn primary" type="button" data-open-only>Sadece Uçuşu Aç</button>
         <button class="otobeyan-btn success" type="button" data-open-declare ${combinedReady ? '' : 'disabled'}>Aç + Beyan Et</button>
@@ -649,6 +690,7 @@ function renderActionPanel() {
   message.querySelector('[data-open-only]').addEventListener('click', () => openFlightConfirmation(false));
   message.querySelector('[data-open-declare]').addEventListener('click', () => openFlightConfirmation(true));
   state.actionPanel = message;
+  renderLiveSummary();
 }
 
 function validateCrewDraft() {
@@ -659,6 +701,7 @@ function validateCrewDraft() {
     if (!String(crew.name || '').trim()) return `${index + 1}. ekipte ad boş.`;
     if (!String(crew.surname || '').trim()) return `${index + 1}. ekipte soyad boş.`;
   }
+  if (!getCaptainName()) return 'Uçuş kaptanı için bir ekip satırında HGBS görevini CP seç.';
   return '';
 }
 
@@ -694,11 +737,11 @@ function openFlightConfirmation(withDeclaration) {
     confirmButton.textContent = 'Uçuşu Aç + Beyan Et →';
     confirmButton.onclick = confirmOpenAndDeclare;
   }
-  if (!state.igoResult?.loadSheet?.finalized) {
+  if (state.igoResult && !state.igoResult.loadSheet?.finalized) {
     const warning = document.getElementById('modalWarningBanner');
     if (warning) {
       warning.style.display = 'block';
-      warning.textContent = '⚠ iGO Load Sheet finalize edilmedi. Bilgiler hazırlanmıştır; devam edersen mevcut değerler beyan edilir.';
+      warning.textContent = '⚠ Uçuş kapanmadı. Bilgiler hazırlanmıştır; devam edersen mevcut değerler beyan edilir.';
     }
   }
 }
