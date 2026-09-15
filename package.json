@@ -1,0 +1,12 @@
+{
+  "name": "gbeyan-render-backend",
+  "version": "1.7.1",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node render/server.mjs",
+    "test": "node --test render/*.test.mjs",
+    "build:static": "node scripts/build-static.mjs"
+  }
+}

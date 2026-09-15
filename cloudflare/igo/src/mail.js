@@ -116,6 +116,7 @@ async function eas(alias, password, command, payload = null, extra = {}, queryEx
   const query = new URLSearchParams({ Cmd: command, User: alias, DeviceId: DEVICE_ID, DeviceType: DEVICE_TYPE, ...queryExtra });
   const response = await fetch(`${EAS}?${query}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(60_000),
     headers: { Authorization: basic(alias, password), 'MS-ASProtocolVersion': '14.1', 'User-Agent': 'BeyanMail/1.5.0beta', ...(payload ? { 'Content-Type': 'application/vnd.ms-sync.wbxml' } : {}), ...extra },
     body: payload,
   });
@@ -484,7 +485,7 @@ export async function refreshMailCache(env, cache, hours = DEFAULT_LOOKBACK_HOUR
   return snapshot;
 }
 
-async function getMailSnapshot(env, cache, hours, force = false) {
+async function getMailSnapshot(env, cache, hours, force = false, runRefresh = null) {
   if (!force && cache?.getMailSnapshot) {
     const stored = await cache.getMailSnapshot();
     if (snapshotIsFresh(stored)) {
@@ -498,7 +499,8 @@ async function getMailSnapshot(env, cache, hours, force = false) {
     }
   }
 
-  const snapshot = await refreshMailCache(env, cache, hours);
+  const load = () => refreshMailCache(env, cache, hours);
+  const snapshot = await (runRefresh ? runRefresh(load) : load());
   return { ...snapshot, fromCache: false };
 }
 
@@ -507,6 +509,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const url = new URL(request.url);
     const route = url.pathname.replace(/^\/api\/mail(?=\/|$)/, '/api');
+    const getSnapshot = (hours, force = false) => getMailSnapshot(env, services.mailCache, hours, force, services.runRefresh);
     try {
       if (!env.EWS_USERNAME || !env.EWS_PASSWORD || !env.TEST_API_KEY) {
         return json({ error: 'EWS_USERNAME, EWS_PASSWORD veya TEST_API_KEY secret eksik.' }, 503);
@@ -530,18 +533,18 @@ export default {
         if (!services.mailCache?.saveMailSettings) return json({ error: 'Kalici ayar deposu hazir degil.' }, 503);
         await services.mailCache.saveMailSettings(settings);
         await services.mailCache.clearMailSnapshot?.();
-        const snapshot = await getMailSnapshot(env, services.mailCache, DEFAULT_LOOKBACK_HOURS, true);
+        const snapshot = await getSnapshot(DEFAULT_LOOKBACK_HOURS, true);
         return json({ ok: true, settings, cachedAt: snapshot.cachedAt, folderStatus: snapshot.folderStatus });
       }
       if (route === '/api/messages') {
         const hours = lookbackHours(url);
-        const snapshot = await getMailSnapshot(env, services.mailCache, hours, url.searchParams.get('refresh') === '1');
+        const snapshot = await getSnapshot(hours, url.searchParams.get('refresh') === '1');
         return json(snapshot);
       }
       if (route === '/api/flight-attachment' || route === '/api/flight-pdf') {
         const flightNo = url.searchParams.get('flightNo');
         const hours = lookbackHours(url);
-        const snapshot = await getMailSnapshot(env, services.mailCache, hours);
+        const snapshot = await getSnapshot(hours);
         const match = findFlightAttachment(snapshot.gendecMessages || snapshot.messages, flightNo);
         if (!match) {
           return json({
@@ -559,7 +562,7 @@ export default {
         const flightNumber = normalizeFlightNumber(url.searchParams.get('flightNumber'));
         const flightDate = normalizeDate(url.searchParams.get('flightDate'));
         if (!flightNumber || !flightDate) return json({ error: 'Ucus numarasi veya tarih gecersiz.' }, 400);
-        const snapshot = await getMailSnapshot(env, services.mailCache, DEFAULT_LOOKBACK_HOURS);
+        const snapshot = await getSnapshot(DEFAULT_LOOKBACK_HOURS);
         const flight = snapshot.flights?.find(item => item.key === `${flightNumber}|${flightDate}`) || null;
         return json({
           ok: true,
@@ -578,7 +581,7 @@ export default {
         return fileResponse(fileBytes, name);
       }
       if (route === '/api/sync' && request.method === 'POST') {
-        const snapshot = await getMailSnapshot(env, services.mailCache, DEFAULT_LOOKBACK_HOURS, true);
+        const snapshot = await getSnapshot(DEFAULT_LOOKBACK_HOURS, true);
         return json({
           ok: true,
           cachedAt: snapshot.cachedAt,
