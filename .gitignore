@@ -11,3 +11,6 @@ yulcaribe-main/index.html
 .dev.vars.*
 **/.wrangler/
 **/node_modules/
+
+# Generated static hosting output
+/dist/

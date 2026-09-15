@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: gbeyan
+    runtime: static
+    branch: main
+    buildCommand: node scripts/build-static.mjs
+    staticPublishPath: ./dist
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+    headers:
+      - path: /*
+        name: Access-Control-Allow-Origin
+        value: "*"
+      - path: /*
+        name: Cross-Origin-Resource-Policy
+        value: cross-origin
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer

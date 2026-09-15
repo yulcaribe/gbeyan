@@ -456,7 +456,7 @@ async function handleCrewFileSelect(event) {
   document.getElementById('crewSubmitBtn').disabled = true;
 }
 
-const FHY_PARSER_CDN_URL = 'https://gbeyan.yulcaribe.workers.dev/gendec/fhy.js?v=1.7.1';
+const FHY_PARSER_CDN_URL = './gendec/fhy.js?v=1.7.1';
 let _fhyParserLoadPromise = null;
 
 function getFhyParserContext() {
