@@ -169,15 +169,15 @@ async function fillLoginForApproval(page, credentials) {
       #eMailorUserName_I,
       input[id*="eMailorUserName"] {
         color: transparent !important;
-        text-shadow: 0 0 0 #111827 !important;
+        text-shadow: none !important;
         -webkit-text-security: disc !important;
+        font-size: 0 !important;
         user-select: none !important;
         caret-color: transparent !important;
       }
     `
   });
   await usernameInput.evaluate(element => {
-    element.type = 'password';
     element.readOnly = true;
     element.setAttribute('autocomplete', 'off');
     element.setAttribute('aria-label', 'Kullanıcı adı gizlendi');
