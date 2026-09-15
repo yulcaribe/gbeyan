@@ -1,10 +1,9 @@
-// Private browser automation gateway.
-// This file is bundled by Cloudflare Workers Builds via package.json.
-// Browser binding adı: BROWSER
+// Private API/cache gateway. iGO browser automation uses Cloud Run when
+// IGO_BROWSER_BACKEND=cloud-run. The BROWSER binding remains as a temporary
+// rollback path until the Cloud Run cutover is verified.
 // Gerekli Worker Secret'ları:
-// IGO_USERNAME, IGO_PASSWORD, EWS_USERNAME, EWS_PASSWORD, TEST_API_KEY
-// CAPTCHA otomatik çözülmez. Yalnız kayıtlı iGO oturumu yoksa/sona erdiyse
-// kullanıcı Live View ekranında kendisi tamamlar.
+// IGO_USERNAME, IGO_PASSWORD, EWS_USERNAME, EWS_PASSWORD, TEST_API_KEY,
+// CLOUDFLARE_SHARED_SECRET
 
 import { launch } from '@cloudflare/playwright';
 import { DurableObject } from 'cloudflare:workers';
@@ -12,7 +11,7 @@ import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
-const RELEASE_VERSION = '1.6.0e';
+const RELEASE_VERSION = '1.6.0f-cloudrun';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
@@ -179,6 +178,17 @@ function isBrowserLaunchRateLimit(error) {
 
 function backgroundLoadSheetRefreshEnabled(env) {
   return /^(1|true|on|enabled)$/i.test(String(env.LOADSHEET_BACKGROUND_REFRESH || 'off'));
+}
+
+function usesCloudRunBackend(env) {
+  return String(env.IGO_BROWSER_BACKEND || '').toLowerCase() === 'cloud-run';
+}
+
+function browserBackendReady(env) {
+  if (usesCloudRunBackend(env)) {
+    return Boolean(env.OTOBEYAN_BROWSER_URL && env.CLOUDFLARE_SHARED_SECRET);
+  }
+  return Boolean(env.BROWSER);
 }
 
 function friendlyBrowserError(error) {
@@ -771,7 +781,7 @@ async function refreshLoadSheetCache(env) {
   }
 }
 
-async function runQuery(env, input, emit) {
+async function runCloudflareBrowserQuery(env, input, emit) {
   const flight = splitFlightNumber(input.flightNumber);
   const date = splitDate(input.flightDate);
   const cached = await getSessionStore(env).getLoadSheet(flight.normalized, date.normalized);
@@ -829,6 +839,76 @@ async function runQuery(env, input, emit) {
   } finally {
     await closeQueuedBrowser(browserHandle);
   }
+}
+
+async function runCloudRunQuery(env, input, emit) {
+  const flight = splitFlightNumber(input.flightNumber);
+  const date = splitDate(input.flightDate);
+  const store = getSessionStore(env);
+  const saved = await store.getSession();
+  const baseUrl = String(env.OTOBEYAN_BROWSER_URL || '').replace(/\/+$/, '');
+  if (!baseUrl || !env.CLOUDFLARE_SHARED_SECRET) throw new Error('Load Sheet servisi hazır değil.');
+
+  emit({ type: 'progress', message: 'Load Sheet hazırlanıyor…' });
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/query`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.CLOUDFLARE_SHARED_SECRET}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({
+        flightNumber: flight.normalized,
+        flightDate: date.normalized,
+        storageState: saved?.storageState || null,
+        credentials: {
+          username: env.IGO_USERNAME,
+          password: env.IGO_PASSWORD
+        }
+      }),
+      signal: AbortSignal.timeout(88_000)
+    });
+  } catch (error) {
+    if (error?.name === 'TimeoutError') throw new Error('Load Sheet sorgusu zaman aşımına uğradı.');
+    throw new Error('Load Sheet servisine ulaşılamadı.');
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    if (payload?.code === 'LOGIN_REQUIRED' || payload?.code === 'CAPTCHA_REQUIRED') {
+      await store.clearSession().catch(() => {});
+    }
+    throw new Error(payload?.error || `Load Sheet servisi HTTP ${response.status} hatası verdi.`);
+  }
+  if (!payload.flight || !payload.loadSheetText || !payload.sourceUrl) {
+    throw new Error('Load Sheet servisi eksik yanıt verdi.');
+  }
+
+  if (payload.storageState) await store.saveSession(payload.storageState);
+  const result = {
+    status: 'ready',
+    igoSessionReused: Boolean(payload.sessionReused),
+    fromCache: false,
+    query: { flightNumber: flight.normalized, flightDate: date.normalized },
+    flight: payload.flight,
+    loadSheet: parseLoadSheet(payload.loadSheetText, payload.sourceUrl)
+  };
+  await store.saveLoadSheet(result);
+  emit({ type: 'result', data: result });
+}
+
+async function runQuery(env, input, emit) {
+  const flight = splitFlightNumber(input.flightNumber);
+  const date = splitDate(input.flightDate);
+  const cached = await getSessionStore(env).getLoadSheet(flight.normalized, date.normalized);
+  if (isFreshLoadSheet(cached)) {
+    emit({ type: 'result', data: cachedLoadSheetResult(cached) });
+    return;
+  }
+  if (usesCloudRunBackend(env)) return runCloudRunQuery(env, input, emit);
+  return runCloudflareBrowserQuery(env, input, emit);
 }
 
 function queryStream(env, input) {
@@ -893,8 +973,9 @@ export default {
       return json({
         ok: true,
         version: RELEASE_VERSION,
+        browserBackend: usesCloudRunBackend(env) ? 'cloud-run' : 'cloudflare',
         ready: Boolean(
-          env.BROWSER && env.IGO_SESSION_STORE && env.IGO_USERNAME && env.IGO_PASSWORD
+          browserBackendReady(env) && env.IGO_SESSION_STORE && env.IGO_USERNAME && env.IGO_PASSWORD
           && env.EWS_USERNAME && env.EWS_PASSWORD
         ),
         sessionReady
@@ -973,7 +1054,7 @@ export default {
 
     if (request.method !== 'POST' || url.pathname !== '/api/igo/query') return notFound();
 
-    if (!env.BROWSER || !env.IGO_SESSION_STORE || !env.IGO_USERNAME || !env.IGO_PASSWORD) {
+    if (!browserBackendReady(env) || !env.IGO_SESSION_STORE || !env.IGO_USERNAME || !env.IGO_PASSWORD) {
       return json({ ok: false, error: 'Servis hazır değil.' }, 503);
     }
 
@@ -1000,7 +1081,7 @@ export default {
     if (env.EWS_USERNAME && env.EWS_PASSWORD) {
       jobs.push(refreshMailCache(env, getSessionStore(env)));
     }
-    if (env.BROWSER && backgroundLoadSheetRefreshEnabled(env)) {
+    if (!usesCloudRunBackend(env) && env.BROWSER && backgroundLoadSheetRefreshEnabled(env)) {
       jobs.push(refreshLoadSheetCache(env));
     }
     if (jobs.length) ctx.waitUntil(Promise.allSettled(jobs));

@@ -6,10 +6,19 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "vars": {
-    "LOADSHEET_BACKGROUND_REFRESH": "off"
+    "LOADSHEET_BACKGROUND_REFRESH": "off",
+    "IGO_BROWSER_BACKEND": "cloudflare",
+    "OTOBEYAN_BROWSER_URL": "https://otobeyan-browser-887978717050.europe-west1.run.app"
   },
   "secrets": {
-    "required": ["IGO_USERNAME", "IGO_PASSWORD", "EWS_USERNAME", "EWS_PASSWORD", "TEST_API_KEY"]
+    "required": [
+      "IGO_USERNAME",
+      "IGO_PASSWORD",
+      "EWS_USERNAME",
+      "EWS_PASSWORD",
+      "TEST_API_KEY",
+      "CLOUDFLARE_SHARED_SECRET"
+    ]
   },
   "ratelimits": [
     {
