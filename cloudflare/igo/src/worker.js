@@ -2,11 +2,15 @@
 // this Worker only authenticates clients, caches results and proxies requests.
 // Secret values are configured in Cloudflare, never committed to this file.
 
+import { launch } from '@cloudflare/playwright';
 import { DurableObject } from 'cloudflare:workers';
 import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
-const RELEASE_VERSION = '1.6.0f-cloudrun';
+const RELEASE_VERSION = '1.6.0g-cloudrun';
+const IGO_ORIGIN = 'https://igo.sunexpress.com';
+const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
+const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
 const SESSION_OBJECT_NAME = 'primary-igo-session';
 const LOADSHEET_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const LOADSHEET_CACHE_RETENTION_MS = 36 * 60 * 60 * 1000;
@@ -96,6 +100,127 @@ function getSessionStore(env) {
 
 function browserBackendReady(env) {
   return Boolean(env.OTOBEYAN_BROWSER_URL && env.CLOUDFLARE_SHARED_SECRET);
+}
+
+function isLoginUrl(value) {
+  return /\/Account\/pgLogin\.aspx/i.test(String(value || ''));
+}
+
+async function gotoWithAbortRetry(page, url, options = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await page.goto(url, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+        ...options
+      });
+    } catch (error) {
+      lastError = error;
+      if (!/net::ERR_ABORTED/i.test(String(error?.message || error)) || attempt === 3) throw error;
+      await page.waitForTimeout(attempt * 1_000);
+    }
+  }
+  throw lastError;
+}
+
+async function fillLoginForHuman(page, env) {
+  await gotoWithAbortRetry(page, LOGIN_URL);
+  const username = page.locator(
+    'input[name="eMailorUserName"], #eMailorUserName_I, input[id*="eMailorUserName"][type="text"]'
+  ).first();
+  const password = page.locator(
+    'input[name="ePassword"], #ePassword_I, input[id*="ePassword"][type="password"]'
+  ).first();
+
+  await username.waitFor({ state: 'visible', timeout: 30_000 });
+  await username.fill(String(env.IGO_USERNAME || ''));
+  await password.fill(String(env.IGO_PASSWORD || ''));
+
+  if ((await username.inputValue()) !== String(env.IGO_USERNAME || '')
+    || (await password.inputValue()) !== String(env.IGO_PASSWORD || '')) {
+    throw new Error('iGO giriş bilgileri forma aktarılamadı.');
+  }
+
+  await page.addStyleTag({
+    content: `
+      input[name="eMailorUserName"],
+      #eMailorUserName_I,
+      input[id*="eMailorUserName"] {
+        -webkit-text-security: disc !important;
+        user-select: none !important;
+        caret-color: transparent !important;
+      }
+    `
+  });
+  await username.evaluate(element => {
+    element.setAttribute('autocomplete', 'off');
+    element.setAttribute('aria-label', 'iGO kullanıcı adı gizlendi');
+    element.readOnly = true;
+  });
+}
+
+async function createLiveView(context, page) {
+  const cdp = await context.newCDPSession(page);
+  try {
+    const result = await cdp.send('Cloudflare.getLiveView', {
+      mode: 'tab',
+      expiresInMs: 10 * 60 * 1000
+    });
+    return result.devtoolsFrontendUrl;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+async function waitForHumanLogin(page, timeoutMs = 8 * 60 * 1000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const currentUrl = page.url();
+    if (currentUrl.startsWith(IGO_ORIGIN) && !isLoginUrl(currentUrl) && currentUrl !== 'about:blank') {
+      await page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(1_000);
+      return;
+    }
+    await page.waitForTimeout(1_000);
+  }
+  const error = new Error('CAPTCHA onayı için ayrılan süre doldu. Yeniden dene.');
+  error.code = 'CAPTCHA_TIMEOUT';
+  throw error;
+}
+
+async function bootstrapIgoSession(env, emit) {
+  if (!env.BROWSER) {
+    const error = new Error('CAPTCHA onay ekranı hazır değil. Cloudflare BROWSER binding eksik.');
+    error.code = 'CAPTCHA_BROWSER_MISSING';
+    throw error;
+  }
+
+  const browser = await launch(env.BROWSER, { keep_alive: 10 * 60 * 1000 });
+  let context;
+  try {
+    context = await browser.newContext();
+    const page = await context.newPage();
+    await fillLoginForHuman(page, env);
+    emit({
+      type: 'captcha',
+      message: 'iGO oturum onayı gerekiyor.',
+      liveViewUrl: await createLiveView(context, page)
+    });
+    await waitForHumanLogin(page);
+    await gotoWithAbortRetry(page, FLIGHT_LIST_URL);
+    if (isLoginUrl(page.url())) {
+      const error = new Error('iGO oturumu doğrulanamadı. CAPTCHA’yı tamamlayıp Giriş düğmesine bas.');
+      error.code = 'CAPTCHA_REQUIRED';
+      throw error;
+    }
+    const storageState = await context.storageState({ indexedDB: true });
+    await getSessionStore(env).saveSession(storageState);
+    emit({ type: 'session', reused: false, message: 'iGO oturumu kaydedildi.' });
+  } finally {
+    await context?.close().catch(() => {});
+    await browser.close().catch(() => {});
+  }
 }
 
 function json(data, status = 200) {
@@ -289,6 +414,40 @@ async function runCloudRunQuery(env, input) {
   return result;
 }
 
+async function runQueryWithCaptchaBootstrap(env, input, emit) {
+  try {
+    return await runCloudRunQuery(env, input);
+  } catch (error) {
+    if (error?.code !== 'CAPTCHA_REQUIRED' && error?.code !== 'LOGIN_REQUIRED') throw error;
+    await bootstrapIgoSession(env, emit);
+    return runCloudRunQuery(env, input);
+  }
+}
+
+function queryStream(env, input) {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      let closed = false;
+      const emit = payload => {
+        if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+      };
+
+      runQueryWithCaptchaBootstrap(env, input, emit)
+        .then(result => emit({ type: 'result', data: result }))
+        .catch(error => emit({
+          type: 'error',
+          code: error?.code || 'QUERY_FAILED',
+          message: error?.message || 'Load Sheet sorgusu başarısız.'
+        }))
+        .finally(() => {
+          closed = true;
+          controller.close();
+        });
+    }
+  });
+}
+
 function privatePageResponse() {
   return new Response(PRIVATE_PAGE, {
     headers: {
@@ -422,15 +581,12 @@ export default {
       return json({ ok: false, error: error.message || 'İstek geçersiz.' }, 400);
     }
 
-    try {
-      return json(await runCloudRunQuery(env, input));
-    } catch (error) {
-      return json({
-        ok: false,
-        code: error?.code || 'QUERY_FAILED',
-        error: error?.message || 'Load Sheet sorgusu başarısız.'
-      }, Number(error?.status) || 502);
-    }
+    return new Response(queryStream(env, input), {
+      headers: {
+        ...API_HEADERS,
+        'Content-Type': 'application/x-ndjson; charset=utf-8'
+      }
+    });
   },
 
   async scheduled(_controller, env, ctx) {
