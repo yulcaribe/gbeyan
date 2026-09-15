@@ -6,7 +6,7 @@ import { DurableObject } from 'cloudflare:workers';
 import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
-const RELEASE_VERSION = '1.6.0h-cloudrun';
+const RELEASE_VERSION = '1.6.0i-cloudrun';
 const SESSION_OBJECT_NAME = 'primary-igo-session';
 const LOADSHEET_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const LOADSHEET_CACHE_RETENTION_MS = 36 * 60 * 60 * 1000;
@@ -289,6 +289,49 @@ async function runCloudRunQuery(env, input) {
   return result;
 }
 
+async function callCloudRunSession(env, path, body) {
+  const baseUrl = String(env.OTOBEYAN_BROWSER_URL || '').replace(/\/+$/, '');
+  if (!baseUrl || !env.CLOUDFLARE_SHARED_SECRET) {
+    const error = new Error('iGO onay servisi hazır değil.');
+    error.status = 503;
+    throw error;
+  }
+
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.CLOUDFLARE_SHARED_SECRET}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(body || {}),
+      signal: AbortSignal.timeout(60_000)
+    });
+  } catch (error) {
+    const wrapped = new Error(error?.name === 'TimeoutError'
+      ? 'iGO onay servisi zaman aşımına uğradı.'
+      : 'iGO onay servisine ulaşılamadı.');
+    wrapped.status = 502;
+    throw wrapped;
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload?.ok) {
+    const error = new Error(payload?.error || `iGO onay servisi HTTP ${response.status} hatası verdi.`);
+    error.code = payload?.code || 'LOGIN_SESSION_FAILED';
+    error.status = response.status === 410 ? 410 : 502;
+    throw error;
+  }
+
+  if (payload.complete && payload.storageState) {
+    await getSessionStore(env).saveSession(payload.storageState);
+  }
+  const { storageState: _privateStorageState, ...safePayload } = payload;
+  return safePayload;
+}
+
 function privatePageResponse() {
   return new Response(PRIVATE_PAGE, {
     headers: {
@@ -406,6 +449,41 @@ export default {
       if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'IGO_SESSION_STORE binding tanımlı değil.' }, 503);
       await getSessionStore(env).clearSession();
       return json({ ok: true });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/igo/session/start') {
+      if (!browserBackendReady(env) || !env.IGO_SESSION_STORE || !env.IGO_USERNAME || !env.IGO_PASSWORD) {
+        return json({ ok: false, error: 'iGO onay servisi hazır değil.' }, 503);
+      }
+      try {
+        return json(await callCloudRunSession(env, '/session/start', {
+          credentials: { username: env.IGO_USERNAME, password: env.IGO_PASSWORD }
+        }));
+      } catch (error) {
+        return json({ ok: false, code: error?.code || 'LOGIN_SESSION_FAILED', error: error.message }, error?.status || 502);
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/igo/session/action') {
+      if (!env.IGO_SESSION_STORE) return json({ ok: false, error: 'Servis hazır değil.' }, 503);
+      try {
+        const input = await request.json();
+        return json(await callCloudRunSession(env, '/session/action', {
+          sessionId: input?.sessionId,
+          action: input?.action
+        }));
+      } catch (error) {
+        return json({ ok: false, code: error?.code || 'LOGIN_SESSION_FAILED', error: error.message }, error?.status || 502);
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/igo/session/cancel') {
+      try {
+        const input = await request.json();
+        return json(await callCloudRunSession(env, '/session/cancel', { sessionId: input?.sessionId }));
+      } catch (error) {
+        return json({ ok: false, code: error?.code || 'LOGIN_SESSION_FAILED', error: error.message }, error?.status || 502);
+      }
     }
 
     if (request.method !== 'POST' || url.pathname !== '/api/igo/query') return notFound();

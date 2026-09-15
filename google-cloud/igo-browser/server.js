@@ -10,6 +10,9 @@ const PORT = process.env.PORT || 8080;
 const IGO_ORIGIN = 'https://igo.sunexpress.com';
 const LOGIN_URL = `${IGO_ORIGIN}/Account/pgLogin.aspx?ReturnUrl=%2fWB%2fpgWBFlightList.aspx`;
 const FLIGHT_LIST_URL = `${IGO_ORIGIN}/WB/pgWBFlightList.aspx`;
+const LOGIN_SESSION_TTL_MS = 8 * 60 * 1000;
+const LOGIN_VIEWPORT = { width: 1280, height: 900 };
+const loginSessions = new Map();
 
 function safeEqual(left, right) {
   const a = Buffer.from(String(left || ''));
@@ -138,6 +141,99 @@ async function fillAndSubmitLogin(page, credentials) {
   }
 }
 
+async function fillLoginForApproval(page, credentials) {
+  const username = String(credentials?.username || '');
+  const password = String(credentials?.password || '');
+  if (!username || !password) {
+    const error = new Error('iGO giriş bilgileri eksik.');
+    error.code = 'LOGIN_REQUIRED';
+    throw error;
+  }
+
+  await gotoWithAbortRetry(page, LOGIN_URL);
+  const usernameInput = page.locator(
+    'input[name="eMailorUserName"], #eMailorUserName_I, input[id*="eMailorUserName"][type="text"]'
+  ).first();
+  const passwordInput = page.locator(
+    'input[name="ePassword"], #ePassword_I, input[id*="ePassword"][type="password"]'
+  ).first();
+  await usernameInput.waitFor({ state: 'visible', timeout: 30_000 });
+  await usernameInput.fill(username);
+  await passwordInput.fill(password);
+
+  // Kullanıcı adı DOM'da form gönderimi için kalır fakat uzaktan gösterilen
+  // görüntüde okunamaz ve kullanıcı tarafından seçilip kopyalanamaz.
+  await page.addStyleTag({
+    content: `
+      input[name="eMailorUserName"],
+      #eMailorUserName_I,
+      input[id*="eMailorUserName"] {
+        color: transparent !important;
+        text-shadow: 0 0 0 #111827 !important;
+        -webkit-text-security: disc !important;
+        user-select: none !important;
+        caret-color: transparent !important;
+      }
+    `
+  });
+  await usernameInput.evaluate(element => {
+    element.type = 'password';
+    element.readOnly = true;
+    element.setAttribute('autocomplete', 'off');
+    element.setAttribute('aria-label', 'Kullanıcı adı gizlendi');
+  });
+}
+
+async function closeLoginSession(sessionId) {
+  const session = loginSessions.get(sessionId);
+  if (!session) return;
+  loginSessions.delete(sessionId);
+  await session.context?.close().catch(() => {});
+  await session.browser?.close().catch(() => {});
+}
+
+async function cleanupLoginSessions() {
+  const now = Date.now();
+  const expired = Array.from(loginSessions.entries())
+    .filter(([, session]) => Number(session.expiresAt || 0) <= now)
+    .map(([sessionId]) => sessionId);
+  await Promise.allSettled(expired.map(closeLoginSession));
+}
+
+function getLoginSession(sessionId) {
+  const session = loginSessions.get(String(sessionId || ''));
+  if (!session || Number(session.expiresAt || 0) <= Date.now()) {
+    const error = new Error('iGO onay oturumu bulunamadı veya süresi doldu.');
+    error.code = 'LOGIN_SESSION_EXPIRED';
+    throw error;
+  }
+  session.expiresAt = Date.now() + LOGIN_SESSION_TTL_MS;
+  return session;
+}
+
+async function loginSessionView(sessionId, session) {
+  const currentUrl = session.page.url();
+  if (currentUrl.startsWith(IGO_ORIGIN) && !isLoginUrl(currentUrl) && currentUrl !== 'about:blank') {
+    await session.page.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => {});
+    await gotoWithAbortRetry(session.page, FLIGHT_LIST_URL);
+    if (!isLoginUrl(session.page.url())) {
+      const storageState = await session.context.storageState({ indexedDB: true });
+      await closeLoginSession(sessionId);
+      return { ok: true, complete: true, storageState };
+    }
+  }
+
+  const image = await session.page.screenshot({ type: 'jpeg', quality: 72 });
+  return {
+    ok: true,
+    complete: false,
+    sessionId,
+    expiresAt: new Date(session.expiresAt).toISOString(),
+    viewport: LOGIN_VIEWPORT,
+    frame: `data:image/jpeg;base64,${image.toString('base64')}`
+  };
+}
+
 async function openIgoSession(browser, storageState, credentials) {
   let context = await browser.newContext(storageState ? { storageState } : {});
   let page = await context.newPage();
@@ -244,6 +340,71 @@ app.post('/browser-test', requireSharedSecret, jsonBody, async (_req, res) => {
   } finally {
     await browser?.close().catch(() => {});
   }
+});
+
+app.post('/session/start', requireSharedSecret, jsonBody, async (req, res) => {
+  let browser;
+  let context;
+  try {
+    await cleanupLoginSessions();
+    await Promise.allSettled(Array.from(loginSessions.keys()).map(closeLoginSession));
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--disable-dev-shm-usage', '--no-sandbox']
+    });
+    context = await browser.newContext({ viewport: LOGIN_VIEWPORT });
+    const page = await context.newPage();
+    await fillLoginForApproval(page, req.body?.credentials || null);
+
+    const sessionId = crypto.randomUUID();
+    const session = {
+      browser,
+      context,
+      page,
+      expiresAt: Date.now() + LOGIN_SESSION_TTL_MS
+    };
+    loginSessions.set(sessionId, session);
+    browser = null;
+    context = null;
+    return res.json(await loginSessionView(sessionId, session));
+  } catch (error) {
+    await context?.close().catch(() => {});
+    await browser?.close().catch(() => {});
+    return res.status(500).json({ ok: false, code: error?.code || 'LOGIN_SESSION_FAILED', error: publicError(error) });
+  }
+});
+
+app.post('/session/action', requireSharedSecret, jsonBody, async (req, res) => {
+  try {
+    await cleanupLoginSessions();
+    const sessionId = String(req.body?.sessionId || '');
+    const session = getLoginSession(sessionId);
+    const action = req.body?.action || {};
+
+    if (action.type === 'click') {
+      const x = Math.max(0, Math.min(LOGIN_VIEWPORT.width, Number(action.x) || 0));
+      const y = Math.max(0, Math.min(LOGIN_VIEWPORT.height, Number(action.y) || 0));
+      await session.page.mouse.click(x, y);
+    } else if (action.type === 'wheel') {
+      const deltaY = Math.max(-1200, Math.min(1200, Number(action.deltaY) || 0));
+      await session.page.mouse.wheel(0, deltaY);
+    } else if (action.type === 'enter') {
+      await session.page.keyboard.press('Enter');
+    } else if (action.type !== 'refresh') {
+      return res.status(400).json({ ok: false, code: 'INVALID_ACTION', error: 'Geçersiz onay işlemi.' });
+    }
+
+    await session.page.waitForTimeout(1_200);
+    return res.json(await loginSessionView(sessionId, session));
+  } catch (error) {
+    const status = error?.code === 'LOGIN_SESSION_EXPIRED' ? 410 : 500;
+    return res.status(status).json({ ok: false, code: error?.code || 'LOGIN_SESSION_FAILED', error: publicError(error) });
+  }
+});
+
+app.post('/session/cancel', requireSharedSecret, jsonBody, async (req, res) => {
+  await closeLoginSession(String(req.body?.sessionId || ''));
+  return res.json({ ok: true, cancelled: true });
 });
 
 app.post('/query', requireSharedSecret, jsonBody, async (req, res) => {

@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.6.0f';
+  const CLIENT_VERSION = '1.6.0i';
   let accessCode = '';
 
   function config() {
@@ -26,9 +26,12 @@
     };
   }
 
-  async function readError(response) {
+  async function responseError(response) {
     const body = await response.json().catch(() => ({}));
-    return body.error || `Servis HTTP ${response.status}`;
+    const error = new Error(body.error || `Servis HTTP ${response.status}`);
+    error.code = body.code || '';
+    error.status = response.status;
+    return error;
   }
 
   async function jsonRequest(path, options = {}) {
@@ -37,7 +40,7 @@
       ...options,
       headers: headers(options.headers)
     });
-    if (!response.ok) throw new Error(await readError(response));
+    if (!response.ok) throw await responseError(response);
     return response.json();
   }
 
@@ -86,7 +89,7 @@
       cache: 'no-store',
       headers: headers()
     });
-    if (!response.ok) throw new Error(await readError(response));
+    if (!response.ok) throw await responseError(response);
     return {
       blob: await response.blob(),
       fileName: decodeURIComponent(response.headers.get('X-Attachment-Name') || `${normalized}.pdf`),
@@ -104,7 +107,7 @@
       headers: headers()
     });
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error(await readError(response));
+    if (!response.ok) throw await responseError(response);
     return response.json();
   }
 
@@ -121,7 +124,7 @@
       headers: headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(input)
     });
-    if (!response.ok) throw new Error(await readError(response));
+    if (!response.ok) throw await responseError(response);
     if ((response.headers.get('Content-Type') || '').includes('application/json')) {
       const result = await response.json();
       onEvent({ type: 'result', data: result });
@@ -153,6 +156,30 @@
     return finalResult;
   }
 
+  function startIgoSession() {
+    return jsonRequest('/api/igo/session/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+  }
+
+  function actIgoSession(sessionId, action) {
+    return jsonRequest('/api/igo/session/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, action })
+    });
+  }
+
+  function cancelIgoSession(sessionId) {
+    return jsonRequest('/api/igo/session/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId })
+    });
+  }
+
   global.OtoBeyanApi = Object.freeze({
     version: CLIENT_VERSION,
     setAccessCode,
@@ -164,6 +191,9 @@
     recentMail,
     flightPdf,
     cachedIgo,
-    queryIgo
+    queryIgo,
+    startIgoSession,
+    actIgoSession,
+    cancelIgoSession
   });
 })(globalThis);
