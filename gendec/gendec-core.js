@@ -1,5 +1,5 @@
 /*
- * Version: v1.7.0
+ * Version: v1.7.1
  * Genel GENDEC beyan kodu.
  * Modal, PDF/Excel okuma, HGSB ekip beyan gönderimi ve generic fallback parser burada kalır.
  * Havayoluya özel parserlar ayrı dosyalardadır: noz.js, rys.js, sxs.js.
@@ -456,7 +456,7 @@ async function handleCrewFileSelect(event) {
   document.getElementById('crewSubmitBtn').disabled = true;
 }
 
-const FHY_PARSER_CDN_URL = 'https://gbeyan.yulcaribe.workers.dev/gendec/fhy.js?v=1.7.0';
+const FHY_PARSER_CDN_URL = 'https://gbeyan.yulcaribe.workers.dev/gendec/fhy.js?v=1.7.1';
 let _fhyParserLoadPromise = null;
 
 function getFhyParserContext() {

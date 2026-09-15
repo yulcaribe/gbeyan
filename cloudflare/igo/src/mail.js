@@ -1,6 +1,6 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v1.7.0
+ * Version: v1.7.1
  * Production credentials come from EWS_USERNAME / EWS_PASSWORD Worker secrets.
  * Credentials never leave Worker secrets.
  */
@@ -19,6 +19,13 @@ const WINDOW_SIZE = 100;
 const MAX_SYNC_PAGES = 5;
 const DEFAULT_LOOKBACK_HOURS = 6;
 const MAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const CREW_ATTACHMENT_EXTENSIONS = Object.freeze(['.pdf', '.xlsx', '.xls']);
+const FLIGHT_CODE_ALIASES = Object.freeze({
+  STW: '2S',
+  '2S': 'STW',
+  TWI: 'TI',
+  TI: 'TWI'
+});
 
 const TAGS = {
   0: { 5:'Sync',6:'Responses',7:'Add',8:'Change',9:'Delete',10:'Fetch',11:'SyncKey',12:'ClientId',13:'ServerId',14:'Status',15:'Collection',16:'Class',18:'CollectionId',19:'GetChanges',20:'MoreAvailable',21:'WindowSize',22:'Commands',23:'Options',24:'FilterType',28:'Collections',29:'ApplicationData',30:'DeletesAsMoves',34:'MIMESupport',35:'MIMETruncation',40:'MaxItems' },
@@ -159,7 +166,11 @@ async function folderRecords(alias, password) {
 }
 
 function folderSegments(value) {
-  const segments = String(value || '').split(/[\\/]+/).map(part => part.trim()).filter(Boolean);
+  const raw = String(value || '').trim();
+  // Use > (or the UI breadcrumb ›) when a real folder name contains /.
+  // Backslash remains supported for simple legacy paths such as SXS\GenDec.
+  const separator = /[>›]/.test(raw) ? /\s*[>›]\s*/ : /\\+/;
+  const segments = raw.split(separator).map(part => part.trim()).filter(Boolean);
   if (!segments.length || segments.length > 8) throw new Error('Mail klasoru yolu gecersiz.');
   return segments;
 }
@@ -296,11 +307,26 @@ function compactMessage(message) {
   };
 }
 
-function findFlightPdf(messages, flightNo) {
+function crewAttachmentExtension(name) {
+  const lowerName = String(name || '').toLowerCase();
+  return CREW_ATTACHMENT_EXTENSIONS.find(extension => lowerName.endsWith(extension)) || '';
+}
+
+function flightNumberVariants(flightNo) {
   const flightKey = normalizeFlightNumber(flightNo);
   if (!flightKey) throw new Error('Ucus numarasi eksik.');
   if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(flightKey)) throw new Error('Ucus numarasi XQ254 biciminde olmali.');
-  const flightPattern = new RegExp(`${flightKey}(?!\\d)`);
+  const variants = new Set([flightKey]);
+  for (const [prefix, alias] of Object.entries(FLIGHT_CODE_ALIASES)) {
+    const number = flightKey.startsWith(prefix) ? flightKey.slice(prefix.length) : '';
+    if (/^\d{1,5}[A-Z]?$/.test(number)) variants.add(`${alias}${number}`);
+  }
+  return [...variants];
+}
+
+function findFlightAttachment(messages, flightNo) {
+  const flightKeys = flightNumberVariants(flightNo);
+  const flightPatterns = flightKeys.map(key => new RegExp(`${key}(?!\\d)`));
   const candidates = [];
 
   for (const message of messages) {
@@ -308,16 +334,19 @@ function findFlightPdf(messages, flightNo) {
     const bodyKey = searchKey(message.body);
 
     for (const attachment of message.attachments || []) {
-      if (!String(attachment.name || '').toLowerCase().endsWith('.pdf')) continue;
+      const extension = crewAttachmentExtension(attachment.name);
+      if (!extension) continue;
       const nameKey = searchKey(attachment.name);
-      const flightMatch = flightPattern.test(nameKey) || flightPattern.test(subjectKey) || flightPattern.test(bodyKey);
+      const flightMatch = flightPatterns.some(pattern => pattern.test(nameKey) || pattern.test(subjectKey) || pattern.test(bodyKey));
       if (!flightMatch) continue;
 
       let score = 0;
-      if (nameKey.includes(flightKey)) score += 50;
-      if (subjectKey.includes(flightKey)) score += 30;
-      if (bodyKey.includes(flightKey)) score += 15;
+      if (flightKeys.some(key => nameKey.includes(key))) score += 50;
+      if (flightKeys.some(key => subjectKey.includes(key))) score += 30;
+      if (flightKeys.some(key => bodyKey.includes(key))) score += 15;
       if (nameKey.includes('GENDEC')) score += 10;
+      if (nameKey.includes('HGBS')) score += 10;
+      if (extension === '.xlsx') score += 3;
       candidates.push({ message, attachment, score });
     }
   }
@@ -326,9 +355,15 @@ function findFlightPdf(messages, flightNo) {
   return candidates[0] || null;
 }
 function fileResponse(bytes, name, extraHeaders = {}) {
-  const safeName = String(name || 'attachment.pdf').replaceAll('"', '');
+  const safeName = String(name || 'attachment').replaceAll('"', '');
   const lowerName = safeName.toLowerCase();
-  const contentType = lowerName.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
+  const contentType = lowerName.endsWith('.pdf')
+    ? 'application/pdf'
+    : lowerName.endsWith('.xlsx')
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : lowerName.endsWith('.xls')
+        ? 'application/vnd.ms-excel'
+        : 'application/octet-stream';
   return new Response(bytes, { headers: {
     ...cors,
     'Content-Type': contentType,
@@ -503,14 +538,14 @@ export default {
         const snapshot = await getMailSnapshot(env, services.mailCache, hours, url.searchParams.get('refresh') === '1');
         return json(snapshot);
       }
-      if (route === '/api/flight-pdf') {
+      if (route === '/api/flight-attachment' || route === '/api/flight-pdf') {
         const flightNo = url.searchParams.get('flightNo');
         const hours = lookbackHours(url);
         const snapshot = await getMailSnapshot(env, services.mailCache, hours);
-        const match = findFlightPdf(snapshot.gendecMessages || snapshot.messages, flightNo);
+        const match = findFlightAttachment(snapshot.gendecMessages || snapshot.messages, flightNo);
         if (!match) {
           return json({
-            error: `Son ${hours} saatte ${flightNo} ucusu icin PDF eki bulunamadi.`,
+            error: `Son ${hours} saatte ${flightNo} ucusu icin PDF veya Excel ekip eki bulunamadi.`,
             searchedMessages: (snapshot.gendecMessages || snapshot.messages || []).length,
             folder: snapshot.settings?.gendec || ''
           }, 404);

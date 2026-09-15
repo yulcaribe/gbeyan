@@ -4,7 +4,7 @@ import { DurableObject } from 'cloudflare:workers';
 import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
-const RELEASE_VERSION = '1.7.0-mail';
+const RELEASE_VERSION = '1.7.1-mail';
 const STORE_NAME = 'primary-mail-cache';
 const API_HEADERS = {
   'Access-Control-Allow-Origin': 'null',
@@ -132,7 +132,7 @@ export default {
           subject: message?.subject || '',
           from: message?.from || '',
           attachments: (message?.attachments || [])
-            .filter(attachment => String(attachment?.name || '').toLowerCase().endsWith('.pdf'))
+            .filter(attachment => /\.(pdf|xlsx|xls)$/i.test(String(attachment?.name || '')))
             .map(attachment => ({ name: attachment?.name || '', size: Number(attachment?.size || 0) }))
         })).filter(message => message.attachments.length)
       });

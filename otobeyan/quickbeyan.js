@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.7.0';
+const QUICKBEYAN_VERSION = '1.7.1';
 
 const state = {
   busy: false,
@@ -30,9 +30,19 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function normalizeFlightNumber(value) {
-  const match = String(value || '').toUpperCase().match(/\b([A-Z0-9]{2,3})\s*[- ]?(\d{1,5}[A-Z]?)\b/);
-  return match ? `${match[1]}${match[2]}` : '';
+function normalizeFlightNumber(value, airlineCode = '') {
+  const compact = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const fullFlight = compact.match(/^([A-Z]{3})(\d{1,5}[A-Z]?)$/)
+    || compact.match(/^([A-Z0-9]{2})(\d{1,5}[A-Z]?)$/);
+  const aliases = { STW: '2S', TWI: 'TI' };
+  if (fullFlight && /[A-Z]/.test(fullFlight[1])) {
+    return `${aliases[fullFlight[1]] || fullFlight[1]}${fullFlight[2]}`;
+  }
+
+  const number = compact.match(/^(\d{1,5}[A-Z]?)$/)?.[1] || '';
+  const company = String(airlineCode || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const prefix = { ...aliases, '2S': '2S', TI: 'TI' }[company] || '';
+  return number && prefix ? `${prefix}${number}` : '';
 }
 
 function normalizeDate(value) {
@@ -111,7 +121,7 @@ function closePanel() {
 }
 
 function isQuickBeyanEligible(row, actionCell) {
-  const flightNumber = normalizeFlightNumber(row?.flightNo);
+  const flightNumber = normalizeFlightNumber(row?.flightNo, row?.ac);
   const hasFlightNumber = Boolean(flightNumber);
   const hasOpenAction = Boolean(actionCell?.querySelector('button[onclick*="openModal("]'));
   return hasFlightNumber && hasOpenAction;
@@ -134,7 +144,7 @@ async function startQuickBeyan(rowIndex, triggerButton) {
   if (!row) return;
 
   const context = {
-    flightNumber: normalizeFlightNumber(row.flightNo),
+    flightNumber: normalizeFlightNumber(row.flightNo, row.ac),
     flightDate: normalizeDate(row.flightDate),
     tailNumber: row.reg || '',
     departurePortCode: row.departureAirport || '',
@@ -311,24 +321,31 @@ async function checkMailConnectivity() {
 }
 
 async function searchCrewMail(context) {
-  if (globalThis.OtoBeyanApi?.flightPdf && typeof globalThis.parseCrewPdfFileData === 'function') {
+  const fetchCrewAttachment = globalThis.OtoBeyanApi?.flightAttachment || globalThis.OtoBeyanApi?.flightPdf;
+  const parsePdf = getMainFunction('parseCrewPdfFileData');
+  const parseExcel = getMainFunction('readCrewExcelFile');
+  if (fetchCrewAttachment && (parsePdf || parseExcel)) {
     try {
-      const pdf = await globalThis.OtoBeyanApi.flightPdf(context.flightNumber);
-      const file = new File([pdf.blob], pdf.fileName || `${context.flightNumber}.pdf`, {
-        type: pdf.blob.type || 'application/pdf',
+      const attachment = await fetchCrewAttachment(context.flightNumber);
+      const fileName = attachment.fileName || `${context.flightNumber}.pdf`;
+      const file = new File([attachment.blob], fileName, {
+        type: attachment.blob.type || 'application/octet-stream',
         lastModified: Date.now()
       });
-      const parsed = await globalThis.parseCrewPdfFileData(file, {
-        flightNo: context.flightNumber,
-        tailNumber: context.tailNumber || '',
-        departurePortCode: context.departurePortCode || '',
-        arrivalPortCode: context.arrivalPortCode || ''
-      });
-      if (!Array.isArray(parsed.crews) || !parsed.crews.length) {
-        throw new Error('GenDec PDF bulundu fakat ekip listesi ayrıştırılamadı.');
+      const isExcel = /\.(xlsx|xls)$/i.test(fileName);
+      const crews = isExcel
+        ? await parseExcel?.(file)
+        : (await parsePdf?.(file, {
+            flightNo: context.flightNumber,
+            tailNumber: context.tailNumber || '',
+            departurePortCode: context.departurePortCode || '',
+            arrivalPortCode: context.arrivalPortCode || ''
+          }))?.crews;
+      if (!Array.isArray(crews) || !crews.length) {
+        throw new Error(`GenDec ${isExcel ? 'Excel' : 'PDF'} bulundu fakat ekip listesi ayrıştırılamadı.`);
       }
-      renderCrewEditor(parsed.crews, `Mail GenDec · ${pdf.fileName}`);
-      return parsed.crews;
+      renderCrewEditor(crews, `Mail GenDec · ${fileName}`);
+      return crews;
     } catch (error) {
       addMessage('GenDec bulunamadı veya okunamadı. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
       if (!state.crews.length) {

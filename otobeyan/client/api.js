@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.7.0';
+  const CLIENT_VERSION = '1.7.1';
   let accessCode = '';
 
   function config() {
@@ -80,12 +80,12 @@
     return jsonRequest('/api/mail/messages?hours=6');
   }
 
-  async function flightPdf(flightNumber) {
+  async function flightAttachment(flightNumber) {
     const normalized = String(flightNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(normalized)) {
       throw new Error('Sefer numarası XQ254 biçiminde olmalı.');
     }
-    const response = await fetch(endpoint(`/api/mail/flight-pdf?flightNo=${encodeURIComponent(normalized)}&hours=6`), {
+    const response = await fetch(endpoint(`/api/mail/flight-attachment?flightNo=${encodeURIComponent(normalized)}&hours=6`), {
       cache: 'no-store',
       headers: headers()
     });
@@ -114,7 +114,8 @@
     health,
     syncMail,
     recentMail,
-    flightPdf,
+    flightAttachment,
+    flightPdf: flightAttachment,
     flightData
   });
 })(globalThis);
