@@ -110,6 +110,23 @@ async function fillAndSubmitLogin(page, credentials) {
   await usernameInput.waitFor({ state: 'visible', timeout: 30_000 });
   await usernameInput.fill(username);
   await passwordInput.fill(password);
+  await page.evaluate(({ usernameValue, passwordValue }) => {
+    if (typeof globalThis.eMailorUserName?.SetValue === 'function') {
+      globalThis.eMailorUserName.SetValue(usernameValue);
+    }
+    if (typeof globalThis.ePassword?.SetValue === 'function') {
+      globalThis.ePassword.SetValue(passwordValue);
+    }
+  }, { usernameValue: username, passwordValue: password });
+  await usernameInput.dispatchEvent('input');
+  await usernameInput.dispatchEvent('change');
+  await passwordInput.dispatchEvent('input');
+  await passwordInput.dispatchEvent('change');
+  await passwordInput.press('Tab');
+
+  if ((await usernameInput.inputValue()) !== username || (await passwordInput.inputValue()) !== password) {
+    throw new Error('iGO giriş bilgileri forma doğru aktarılamadı.');
+  }
 
   const submitCandidates = [
     'button[type="submit"]',
