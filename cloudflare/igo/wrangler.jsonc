@@ -6,8 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "vars": {
-    "LOADSHEET_BACKGROUND_REFRESH": "off",
-    "IGO_BROWSER_BACKEND": "cloudflare",
     "OTOBEYAN_BROWSER_URL": "https://otobeyan-browser-887978717050.europe-west1.run.app"
   },
   "secrets": {
@@ -30,9 +28,6 @@
       }
     }
   ],
-  "browser": {
-    "binding": "BROWSER"
-  },
   "durable_objects": {
     "bindings": [
       {
