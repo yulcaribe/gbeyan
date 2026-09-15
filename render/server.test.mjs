@@ -94,7 +94,7 @@ test('health, key checks, local/hosted CORS, preflight and rate limit', async t 
   for (let i = 0; i < 12; i++) last = await request('/api/auth/verify', { Authorization: 'Bearer wrong' });
   assert.equal(last.status, 429);
   assert.equal((await request('/api/auth/verify')).status, 200);
-  assert.equal((await request('/cloudflare/igo/src/mail.js')).status, 404);
+  assert.equal((await request('/render/mail.mjs')).status, 404);
   const page = await request('/', {});
   assert.equal(page.status, 200);
   assert.match(page.headers['content-security-policy'], /connect-src 'self'/);

@@ -3,8 +3,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
-import mailService from '../cloudflare/igo/src/mail.js';
-import PRIVATE_PAGE from '../cloudflare/igo/src/private-page.js';
+import mailService from './mail.mjs';
+import PRIVATE_PAGE from './private-page.mjs';
 import { MailStore } from './mail-store.mjs';
 
 const VERSION = '1.7.1-mail-render';

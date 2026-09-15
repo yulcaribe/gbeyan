@@ -1,8 +1,7 @@
 # Render mail/API sunucusu
 
-Mevcut mail ve deterministik parser modüllerini Node.js üzerinde kullanır.
-Cloudflare Worker, Durable Object ve cron çalışmasına ihtiyaç duymaz.
-Bu sürüm yalnızca GitHub'daki mail Worker'ını taşır; iGo login proxy'si içermez.
+Mail ve deterministik parser modüllerini Node.js üzerinde kullanır.
+Sunucu modüllerinin tamamı bu klasördedir. Veriler istek üzerine güncellenir.
 
 ## Render kurulumu
 
@@ -41,7 +40,7 @@ Yayın bittikten sonra Render'ın verdiği gerçek API adresini al.
 `otobeyan/config.js` içindeki `workerUrl` bu adresle değiştirilmeli,
 ardından `otobeyan/loader.js` içindeki config hash'i ve `index.html` içindeki
 loader hash'i yeniden hesaplanmalıdır. Bu adım tamamlanana kadar istemci
-eski Worker adresini kullanmaya devam eder.
+mevcut API adresini kullanmaya devam eder.
 
 `/` adresi mevcut mail veri ekranını açar. `/healthz` yalnızca sunucunun ayakta
 olduğunu gösterir; Exchange bağlantısını doğrulamaz. API anahtarıyla
@@ -57,7 +56,7 @@ Yeni istek geldiğinde gerekiyorsa son 6 saat yeniden taranır.
 
 Snapshot ve panelden değiştirilen klasör ayarları bellektedir; sunucu yeniden
 başladığında kaybolur. Kalmasını istediğin klasör yollarını Render Environment
-alanına gir. Worker'daki eski önbellek kendiliğinden taşınmaz; yeniden oluşturulur.
+alanına gir. Önceki sunucunun önbelleği taşınmaz; yeniden oluşturulur.
 
 API, local HTML'nin `null` origin'ine, `https://gbeyan.onrender.com` origin'ine
 ve Render'ın `RENDER_EXTERNAL_URL` ile verdiği kendi adresine izin verir.

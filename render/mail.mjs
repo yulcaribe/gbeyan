@@ -1,10 +1,10 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
  * Version: v1.7.1
- * Production credentials come from EWS_USERNAME / EWS_PASSWORD Worker secrets.
- * Credentials never leave Worker secrets.
+ * Production credentials come from server environment variables.
+ * Credentials stay on the server.
  */
-import { buildFlightRecords, normalizeDate, normalizeFlightNumber, parseLdmMessage, parseTripInfoMessage } from './mail-parsers.js';
+import { buildFlightRecords, normalizeDate, normalizeFlightNumber, parseLdmMessage, parseTripInfoMessage } from './mail-parsers.mjs';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';

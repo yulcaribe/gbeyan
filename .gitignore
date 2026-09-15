@@ -3,13 +3,10 @@ yulcaribe-main/index.html
 10.09.2026 DAILY.xlsx
 .DS_Store
 
-# Local secrets and Cloudflare development state
+# Local credentials and dependencies
 .env
 .env.*
 !.env.example
-.dev.vars
-.dev.vars.*
-**/.wrangler/
 **/node_modules/
 
 # Generated static hosting output
