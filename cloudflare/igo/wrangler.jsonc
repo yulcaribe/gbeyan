@@ -28,9 +28,6 @@
       }
     }
   ],
-  "browser": {
-    "binding": "BROWSER"
-  },
   "durable_objects": {
     "bindings": [
       {
