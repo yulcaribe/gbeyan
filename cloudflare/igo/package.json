@@ -1,6 +1,6 @@
 {
-  "name": "gbeyan-igo-worker",
-  "version": "0.2.0",
+  "name": "gbeyan-mail-worker",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "scripts": {

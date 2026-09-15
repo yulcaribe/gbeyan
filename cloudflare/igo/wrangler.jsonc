@@ -5,17 +5,11 @@
   "compatibility_date": "2026-09-14",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
-  "vars": {
-    "OTOBEYAN_BROWSER_URL": "https://otobeyan-browser-887978717050.europe-west1.run.app"
-  },
   "secrets": {
     "required": [
-      "IGO_USERNAME",
-      "IGO_PASSWORD",
       "EWS_USERNAME",
       "EWS_PASSWORD",
-      "TEST_API_KEY",
-      "CLOUDFLARE_SHARED_SECRET"
+      "TEST_API_KEY"
     ]
   },
   "ratelimits": [
@@ -31,8 +25,8 @@
   "durable_objects": {
     "bindings": [
       {
-        "name": "IGO_SESSION_STORE",
-        "class_name": "IgoSessionStore"
+        "name": "MAIL_DATA_STORE",
+        "class_name": "MailDataStore"
       }
     ]
   },
@@ -40,6 +34,11 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["IgoSessionStore"]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["MailDataStore"],
+      "deleted_classes": ["IgoSessionStore"]
     }
   ],
   "observability": {

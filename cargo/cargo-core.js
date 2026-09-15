@@ -1,5 +1,5 @@
 /*
- * Version: v1.6.0f
+ * Version: v1.7.0
  * Cargo manifest management.
  * Manual entry lives here; PDF and Excel parsers can be added as separate files later.
  */

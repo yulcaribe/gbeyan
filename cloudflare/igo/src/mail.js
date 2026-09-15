@@ -1,14 +1,20 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v1.6.0j
+ * Version: v1.7.0
  * Production credentials come from EWS_USERNAME / EWS_PASSWORD Worker secrets.
  * Credentials never leave Worker secrets.
  */
+import { buildFlightRecords, normalizeDate, normalizeFlightNumber, parseLdmMessage, parseTripInfoMessage } from './mail-parsers.js';
+
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
 const DEVICE_ID = 'BeyanMailClient01';
 const DEVICE_TYPE = 'BeyanWeb';
-const TARGET_FOLDER_PATH = ['SXS', 'GenDec'];
+const DEFAULT_FOLDER_SETTINGS = Object.freeze({
+  gendec: 'SXS\\GenDec',
+  ldm: 'SXS\\GenDec',
+  tripInfo: 'SXS\\GenDec'
+});
 const WINDOW_SIZE = 100;
 const MAX_SYNC_PAGES = 5;
 const DEFAULT_LOOKBACK_HOURS = 6;
@@ -140,9 +146,9 @@ function syncPayload(collectionId, syncKey, getChanges) {
 
   return document(tag(0, 5, tag(0, 28, tag(0, 15, collection))));
 }
-async function targetFolder(alias, password) {
+async function folderRecords(alias, password) {
   const { tree } = await eas(alias, password, 'FolderSync', folderSyncPayload());
-  const records = [...nodes(tree, 'Add'), ...nodes(tree, 'Update')]
+  return [...nodes(tree, 'Add'), ...nodes(tree, 'Update')]
     .map(folder => ({
       id: first(folder, 'ServerId'),
       parentId: first(folder, 'ParentId'),
@@ -150,10 +156,20 @@ async function targetFolder(alias, password) {
       type: first(folder, 'Type')
     }))
     .filter(folder => folder.id && folder.name);
+}
+
+function folderSegments(value) {
+  const segments = String(value || '').split(/[\\/]+/).map(part => part.trim()).filter(Boolean);
+  if (!segments.length || segments.length > 8) throw new Error('Mail klasoru yolu gecersiz.');
+  return segments;
+}
+
+function targetFolder(records, folderPath) {
+  const segments = folderSegments(folderPath);
 
   let parentId = null;
   let current = null;
-  for (const segment of TARGET_FOLDER_PATH) {
+  for (const segment of segments) {
     const wanted = segment.toLocaleLowerCase('tr-TR');
     const candidates = records.filter(folder => folder.name.toLocaleLowerCase('tr-TR') === wanted);
     current = parentId === null
@@ -161,7 +177,7 @@ async function targetFolder(alias, password) {
       : candidates.find(folder => folder.parentId === parentId);
     if (!current) {
       const available = records.map(folder => folder.name).sort().join(', ');
-      throw new Error(`Mail klasoru bulunamadi: ${TARGET_FOLDER_PATH.join('\\')}. Bulunan klasorler: ${available.slice(0, 2500)}`);
+      throw new Error(`Mail klasoru bulunamadi: ${segments.join('\\')}. Bulunan klasorler: ${available.slice(0, 2500)}`);
     }
     parentId = current.id;
   }
@@ -185,8 +201,7 @@ function messageFrom(add) {
       .filter(file => file.id && file.name),
   };
 }
-async function loadMessages(alias, password) {
-  const folder = await targetFolder(alias, password);
+async function loadMessages(alias, password, folder) {
   const initial = await eas(alias, password, 'Sync', syncPayload(folder.id, '0', false));
   let syncKey = first(initial.tree, 'SyncKey');
   if (!syncKey) {
@@ -282,9 +297,9 @@ function compactMessage(message) {
 }
 
 function findFlightPdf(messages, flightNo) {
-  const flightKey = searchKey(flightNo);
+  const flightKey = normalizeFlightNumber(flightNo);
   if (!flightKey) throw new Error('Ucus numarasi eksik.');
-  if (!/^XQ\d{1,5}[A-Z]?$/.test(flightKey)) throw new Error('Ucus numarasi XQ254 biciminde olmali.');
+  if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(flightKey)) throw new Error('Ucus numarasi XQ254 biciminde olmali.');
   const flightPattern = new RegExp(`${flightKey}(?!\\d)`);
   const candidates = [];
 
@@ -334,18 +349,85 @@ const cors = {
 };
 function json(data, status = 200) { return Response.json(data, { status, headers: cors }); }
 
-function snapshotFrom(result, hours) {
-  const cachedAt = new Date().toISOString();
+function folderPath(value, fallback) {
+  const normalized = folderSegments(value || fallback).join('\\');
+  if (normalized.length > 300) throw new Error('Mail klasoru yolu cok uzun.');
+  return normalized;
+}
+
+function normalizeSettings(value = {}, env = {}) {
   return {
-    cacheVersion: 1,
-    folder: TARGET_FOLDER_PATH.join('\\'),
-    messages: recentMessages(result.messages, hours).map(compactMessage),
+    gendec: folderPath(value.gendec || env.GENDEC_FOLDER_PATH, DEFAULT_FOLDER_SETTINGS.gendec),
+    ldm: folderPath(value.ldm || env.LDM_FOLDER_PATH, DEFAULT_FOLDER_SETTINGS.ldm),
+    tripInfo: folderPath(value.tripInfo || env.TRIP_INFO_FOLDER_PATH, DEFAULT_FOLDER_SETTINGS.tripInfo)
+  };
+}
+
+async function currentSettings(env, cache) {
+  const stored = cache?.getMailSettings ? await cache.getMailSettings() : null;
+  return normalizeSettings(stored || {}, env);
+}
+
+async function loadConfiguredMessages(alias, password, settings) {
+  const records = await folderRecords(alias, password);
+  const paths = [...new Set(Object.values(settings))];
+  const settled = await Promise.allSettled(paths.map(async path => {
+    const folder = targetFolder(records, path);
+    return [path, await loadMessages(alias, password, folder)];
+  }));
+  const byPath = new Map();
+  const errors = {};
+  settled.forEach((result, index) => {
+    const path = paths[index];
+    if (result.status === 'fulfilled') byPath.set(path, result.value[1]);
+    else errors[path] = result.reason instanceof Error ? result.reason.message : String(result.reason);
+  });
+  return { byPath, errors };
+}
+
+function recentParsed(records, hours, now = Date.now()) {
+  const cutoff = now - hours * 60 * 60 * 1000;
+  return (records || []).filter(record => {
+    const receivedAt = Date.parse(record?.source?.receivedAt || '');
+    return Number.isFinite(receivedAt) && receivedAt >= cutoff && receivedAt <= now + 5 * 60 * 1000;
+  });
+}
+
+function snapshotFrom(results, settings, hours, previous = null) {
+  const cachedAt = new Date().toISOString();
+  const recentFor = source => recentMessages(results.byPath.get(settings[source])?.messages || [], hours);
+  const samePreviousSetting = source => previous?.settings?.[source] === settings[source];
+  const gendecMessages = results.byPath.has(settings.gendec)
+    ? recentFor('gendec').map(compactMessage)
+    : samePreviousSetting('gendec') ? recentMessages(previous?.gendecMessages || previous?.messages, hours) : [];
+  const ldmRecords = results.byPath.has(settings.ldm)
+    ? recentFor('ldm').map(message => parseLdmMessage(message, settings.ldm)).filter(Boolean)
+    : samePreviousSetting('ldm') ? recentParsed(previous?.parsed?.ldm, hours) : [];
+  const tripInfoRecords = results.byPath.has(settings.tripInfo)
+    ? recentFor('tripInfo').map(message => parseTripInfoMessage(message, settings.tripInfo)).filter(Boolean)
+    : samePreviousSetting('tripInfo') ? recentParsed(previous?.parsed?.tripInfo, hours) : [];
+  const folderStatus = Object.fromEntries(Object.entries(settings).map(([source, path]) => {
+    const result = results.byPath.get(path);
+    return [source, {
+      path,
+      ok: Boolean(result),
+      error: results.errors[path] || null,
+      stale: !result && samePreviousSetting(source),
+      fetchedMessages: result?.messages?.length || 0,
+      pages: result?.pages || 0,
+      moreAvailable: Boolean(result?.moreAvailable)
+    }];
+  }));
+
+  return {
+    cacheVersion: 2,
+    settings,
+    folderStatus,
+    messages: gendecMessages,
+    gendecMessages,
+    parsed: { ldm: ldmRecords, tripInfo: tripInfoRecords },
+    flights: buildFlightRecords(ldmRecords, tripInfoRecords),
     lookbackHours: hours,
-    fetchedMessages: result.messages.length,
-    syncKey: result.syncKey,
-    pages: result.pages,
-    moreAvailable: result.moreAvailable,
-    limit: result.limit,
     cachedAt,
     expiresAt: new Date(Date.now() + MAIL_CACHE_TTL_MS).toISOString()
   };
@@ -359,8 +441,10 @@ function snapshotIsFresh(snapshot) {
 export async function refreshMailCache(env, cache, hours = DEFAULT_LOOKBACK_HOURS) {
   const alias = userAlias(env.EWS_USERNAME);
   if (!env.EWS_PASSWORD) throw new Error('EWS_PASSWORD secret eksik.');
-  const result = await loadMessages(alias, env.EWS_PASSWORD);
-  const snapshot = snapshotFrom(result, hours);
+  const settings = await currentSettings(env, cache);
+  const previous = cache?.getMailSnapshot ? await cache.getMailSnapshot() : null;
+  const results = await loadConfiguredMessages(alias, env.EWS_PASSWORD, settings);
+  const snapshot = snapshotFrom(results, settings, hours, previous);
   if (cache?.saveMailSnapshot) await cache.saveMailSnapshot(snapshot);
   return snapshot;
 }
@@ -371,7 +455,8 @@ async function getMailSnapshot(env, cache, hours, force = false) {
     if (snapshotIsFresh(stored)) {
       return {
         ...stored,
-        messages: recentMessages(stored.messages, hours),
+        messages: recentMessages(stored.gendecMessages || stored.messages, hours),
+        gendecMessages: recentMessages(stored.gendecMessages || stored.messages, hours),
         lookbackHours: hours,
         fromCache: true
       };
@@ -397,8 +482,21 @@ export default {
       const alias = userAlias(env.EWS_USERNAME);
       const password = env.EWS_PASSWORD;
       if (route === '/api/login') {
-        await targetFolder(alias, password);
-        return json({ ok: true, user: alias, folder: TARGET_FOLDER_PATH.join('\\') });
+        const settings = await currentSettings(env, services.mailCache);
+        const results = await loadConfiguredMessages(alias, password, settings);
+        return json({ ok: true, user: alias, settings, errors: results.errors });
+      }
+      if (route === '/api/settings' && request.method === 'GET') {
+        return json({ ok: true, settings: await currentSettings(env, services.mailCache) });
+      }
+      if (route === '/api/settings' && request.method === 'POST') {
+        const input = await request.json();
+        const settings = normalizeSettings(input?.settings || input, env);
+        if (!services.mailCache?.saveMailSettings) return json({ error: 'Kalici ayar deposu hazir degil.' }, 503);
+        await services.mailCache.saveMailSettings(settings);
+        await services.mailCache.clearMailSnapshot?.();
+        const snapshot = await getMailSnapshot(env, services.mailCache, DEFAULT_LOOKBACK_HOURS, true);
+        return json({ ok: true, settings, cachedAt: snapshot.cachedAt, folderStatus: snapshot.folderStatus });
       }
       if (route === '/api/messages') {
         const hours = lookbackHours(url);
@@ -408,22 +506,33 @@ export default {
       if (route === '/api/flight-pdf') {
         const flightNo = url.searchParams.get('flightNo');
         const hours = lookbackHours(url);
-        let snapshot = await getMailSnapshot(env, services.mailCache, hours);
-        let match = findFlightPdf(snapshot.messages, flightNo);
-        if (!match && snapshot.fromCache) {
-          snapshot = await getMailSnapshot(env, services.mailCache, hours, true);
-          match = findFlightPdf(snapshot.messages, flightNo);
-        }
+        const snapshot = await getMailSnapshot(env, services.mailCache, hours);
+        const match = findFlightPdf(snapshot.gendecMessages || snapshot.messages, flightNo);
         if (!match) {
           return json({
             error: `Son ${hours} saatte ${flightNo} ucusu icin PDF eki bulunamadi.`,
-            searchedMessages: snapshot.messages.length,
-            moreAvailable: snapshot.moreAvailable
+            searchedMessages: (snapshot.gendecMessages || snapshot.messages || []).length,
+            folder: snapshot.settings?.gendec || ''
           }, 404);
         }
         const bytes = await fetchAttachment(alias, password, match.attachment.id);
         return fileResponse(bytes, match.attachment.name, {
           'X-Mail-Subject': encodeURIComponent(String(match.message.subject || ''))
+        });
+      }
+      if (route === '/api/flight-data') {
+        const flightNumber = normalizeFlightNumber(url.searchParams.get('flightNumber'));
+        const flightDate = normalizeDate(url.searchParams.get('flightDate'));
+        if (!flightNumber || !flightDate) return json({ error: 'Ucus numarasi veya tarih gecersiz.' }, 400);
+        const snapshot = await getMailSnapshot(env, services.mailCache, DEFAULT_LOOKBACK_HOURS);
+        const flight = snapshot.flights?.find(item => item.key === `${flightNumber}|${flightDate}`) || null;
+        return json({
+          ok: true,
+          status: flight ? 'ready' : 'not_found',
+          query: { flightNumber, flightDate },
+          flight,
+          cachedAt: snapshot.cachedAt,
+          folderStatus: snapshot.folderStatus
         });
       }
       if (route === '/api/attachment') {
@@ -439,7 +548,8 @@ export default {
           ok: true,
           cachedAt: snapshot.cachedAt,
           expiresAt: snapshot.expiresAt,
-          messageCount: snapshot.messages.length,
+          messageCount: snapshot.gendecMessages.length,
+          flightCount: snapshot.flights.length,
           lookbackHours: snapshot.lookbackHours
         });
       }

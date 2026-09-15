@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.6.0j';
+  const CLIENT_VERSION = '1.7.0';
   let accessCode = '';
 
   function config() {
@@ -82,7 +82,7 @@
 
   async function flightPdf(flightNumber) {
     const normalized = String(flightNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!/^XQ\d{1,5}[A-Z]?$/.test(normalized)) {
+    if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(normalized)) {
       throw new Error('Sefer numarası XQ254 biçiminde olmalı.');
     }
     const response = await fetch(endpoint(`/api/mail/flight-pdf?flightNo=${encodeURIComponent(normalized)}&hours=6`), {
@@ -97,87 +97,12 @@
     };
   }
 
-  async function cachedIgo(input) {
+  async function flightData(input) {
     const params = new URLSearchParams({
       flightNumber: String(input?.flightNumber || ''),
       flightDate: String(input?.flightDate || '')
     });
-    const response = await fetch(endpoint(`/api/igo/loadsheet?${params}`), {
-      cache: 'no-store',
-      headers: headers()
-    });
-    if (response.status === 404) return null;
-    if (!response.ok) throw await responseError(response);
-    return response.json();
-  }
-
-  async function queryIgo(input, onEvent = () => {}) {
-    const cached = await cachedIgo(input);
-    if (cached) {
-      onEvent({ type: 'result', data: cached });
-      return cached;
-    }
-
-    const response = await fetch(endpoint('/api/igo/query'), {
-      method: 'POST',
-      cache: 'no-store',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(input)
-    });
-    if (!response.ok) throw await responseError(response);
-    if ((response.headers.get('Content-Type') || '').includes('application/json')) {
-      const result = await response.json();
-      onEvent({ type: 'result', data: result });
-      return result;
-    }
-    if (!response.body) throw new Error('iGO sorgu akışı açılamadı.');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let finalResult = null;
-
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      buffer += decoder.decode(chunk.value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        const event = JSON.parse(line);
-        onEvent(event);
-        if (event.type === 'error') throw new Error(event.message || 'iGO sorgusu başarısız.');
-        if (event.type === 'result') finalResult = event.data;
-      }
-    }
-
-    if (!finalResult) throw new Error('iGO sorgusu sonuç döndürmedi.');
-    return finalResult;
-  }
-
-  function startIgoSession() {
-    return jsonRequest('/api/igo/session/start', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{}'
-    });
-  }
-
-  function actIgoSession(sessionId, action) {
-    return jsonRequest('/api/igo/session/action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, action })
-    });
-  }
-
-  function cancelIgoSession(sessionId) {
-    return jsonRequest('/api/igo/session/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId })
-    });
+    return jsonRequest(`/api/mail/flight-data?${params}`);
   }
 
   global.OtoBeyanApi = Object.freeze({
@@ -190,10 +115,6 @@
     syncMail,
     recentMail,
     flightPdf,
-    cachedIgo,
-    queryIgo,
-    startIgoSession,
-    actIgoSession,
-    cancelIgoSession
+    flightData
   });
 })(globalThis);
