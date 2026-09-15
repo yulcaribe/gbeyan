@@ -1,5 +1,5 @@
 /*
- * Version: v1.6.0e
+ * Version: v1.6.0f
  * RYS / RR / Ryanair-Buzz GENDEC parser.
  * PU - SURNAME,NAME gibi virgüllü rol satırlarını okur.
  */

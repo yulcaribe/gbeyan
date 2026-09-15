@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.6.0e';
+const QUICKBEYAN_VERSION = '1.6.0f';
 
 const state = {
   busy: false,

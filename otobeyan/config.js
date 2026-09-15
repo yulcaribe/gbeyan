@@ -2,7 +2,7 @@
   'use strict';
 
   global.OTOBEYAN_CONFIG = Object.freeze({
-    releaseVersion: '1.6.0e',
+    releaseVersion: '1.6.0f',
     workerUrl: 'https://igo.mehmetisaacar47.workers.dev',
     mailLookbackHours: 6
   });

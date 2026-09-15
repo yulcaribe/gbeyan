@@ -231,21 +231,17 @@ function parseLoadSheet(text, url) {
   };
 }
 
-async function runCloudRunQuery(env, input, emit) {
+async function runCloudRunQuery(env, input) {
   const flight = splitFlightNumber(input.flightNumber);
   const date = splitDate(input.flightDate);
   const store = getSessionStore(env);
   const cached = await store.getLoadSheet(flight.normalized, date.normalized);
-  if (isFreshLoadSheet(cached)) {
-    emit({ type: 'result', data: cachedLoadSheetResult(cached) });
-    return;
-  }
+  if (isFreshLoadSheet(cached)) return cachedLoadSheetResult(cached);
 
   const saved = await store.getSession();
   const baseUrl = String(env.OTOBEYAN_BROWSER_URL || '').replace(/\/+$/, '');
   if (!baseUrl || !env.CLOUDFLARE_SHARED_SECRET) throw new Error('Load Sheet servisi hazır değil.');
 
-  emit({ type: 'progress', message: 'Load Sheet hazırlanıyor…' });
   let response;
   try {
     response = await fetch(`${baseUrl}/query`, {
@@ -273,7 +269,10 @@ async function runCloudRunQuery(env, input, emit) {
     if (payload?.code === 'LOGIN_REQUIRED' || payload?.code === 'CAPTCHA_REQUIRED') {
       await store.clearSession().catch(() => {});
     }
-    throw new Error(payload?.error || `Load Sheet servisi HTTP ${response.status} hatası verdi.`);
+    const error = new Error(payload?.error || `Load Sheet servisi HTTP ${response.status} hatası verdi.`);
+    error.status = response.status === 409 ? 409 : 502;
+    error.code = payload?.code || 'CLOUD_RUN_ERROR';
+    throw error;
   }
   if (!payload.flight || !payload.loadSheetText || !payload.sourceUrl) throw new Error('Load Sheet servisi eksik yanıt verdi.');
 
@@ -287,25 +286,7 @@ async function runCloudRunQuery(env, input, emit) {
     loadSheet: parseLoadSheet(payload.loadSheetText, payload.sourceUrl)
   };
   await store.saveLoadSheet(result);
-  emit({ type: 'result', data: result });
-}
-
-function queryStream(env, input) {
-  const encoder = new TextEncoder();
-  return new ReadableStream({
-    start(controller) {
-      let closed = false;
-      const emit = payload => {
-        if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
-      };
-      runCloudRunQuery(env, input, emit)
-        .catch(error => emit({ type: 'error', message: error.message || 'Sorgu başarısız.' }))
-        .finally(() => {
-          closed = true;
-          controller.close();
-        });
-    }
-  });
+  return result;
 }
 
 function privatePageResponse() {
@@ -441,9 +422,15 @@ export default {
       return json({ ok: false, error: error.message || 'İstek geçersiz.' }, 400);
     }
 
-    return new Response(queryStream(env, input), {
-      headers: { ...API_HEADERS, 'Content-Type': 'application/x-ndjson; charset=utf-8' }
-    });
+    try {
+      return json(await runCloudRunQuery(env, input));
+    } catch (error) {
+      return json({
+        ok: false,
+        code: error?.code || 'QUERY_FAILED',
+        error: error?.message || 'Load Sheet sorgusu başarısız.'
+      }, Number(error?.status) || 502);
+    }
   },
 
   async scheduled(_controller, env, ctx) {

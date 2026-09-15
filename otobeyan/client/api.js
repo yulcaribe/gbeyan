@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.6.0e';
+  const CLIENT_VERSION = '1.6.0f';
   let accessCode = '';
 
   function config() {
@@ -122,6 +122,11 @@
       body: JSON.stringify(input)
     });
     if (!response.ok) throw new Error(await readError(response));
+    if ((response.headers.get('Content-Type') || '').includes('application/json')) {
+      const result = await response.json();
+      onEvent({ type: 'result', data: result });
+      return result;
+    }
     if (!response.body) throw new Error('iGO sorgu akışı açılamadı.');
 
     const reader = response.body.getReader();
