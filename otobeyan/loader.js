@@ -3,11 +3,11 @@
 
   const loaderUrl = document.currentScript?.src || '';
   const baseUrl = loaderUrl.slice(0, loaderUrl.lastIndexOf('/') + 1);
-  const buildVersion = new URL(loaderUrl, location.href).searchParams.get('v') || '1.6.0i';
+  const buildVersion = new URL(loaderUrl, location.href).searchParams.get('v') || '1.6.0j';
   const integrity = Object.freeze({
-    'config.js': 'sha384-DdCnxyT8if2V8WRtd/p+rPjT1/utglXdSjJZDpwWe9J0TB+T7IV6nlOpbphlZl6k',
-    'client/api.js': 'sha384-X2EnogAvZMstE33Cob0ftqolIB9kZ+MYlhPt4BaiAB5/fIQ6AKRq/JbyGChzFNB6',
-    'quickbeyan.js': 'sha384-GdC5Kb4cgxAtEHH49IHp8ZqoHsSZgv00uj329CruJ2LtOXQrxeppgNYlMHLcFCWY'
+    'config.js': 'sha384-tdFyNP00A9Cunvq9BAlvIpeA57hmyuHpgNoBEeFggJE4dRJoUqNWToE+E/TLuQhv',
+    'client/api.js': 'sha384-SAkNbXdwJ2Zcd1pKGAKZxFD6ftpxwLFU4PODB/3eDveHgYpsRvitb1s6guEKsw0n',
+    'quickbeyan.js': 'sha384-/pR2fKOQOth69IQ47kr9bRBVOWdhxGKS/SITc8Ux5a9qDqsxyhDYR1QUsWW1nn11'
   });
   let featureScriptPromise = null;
   let unlocked = false;
@@ -52,7 +52,7 @@
     gate.dataset.state = state;
     status.textContent = message;
     button.disabled = state === 'checking' || state === 'ready';
-    button.textContent = state === 'checking' ? 'Kontrol…' : state === 'ready' ? '✓ Etkin · 1.6.0i' : 'Etkinleştir';
+    button.textContent = state === 'checking' ? 'Kontrol…' : state === 'ready' ? '✓ Etkin · 1.6.0j' : 'Etkinleştir';
     input.disabled = state === 'checking' || state === 'ready';
     if (state === 'ready') input.value = '';
   }

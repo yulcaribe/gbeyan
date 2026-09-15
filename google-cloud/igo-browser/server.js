@@ -402,6 +402,22 @@ app.post('/session/action', requireSharedSecret, jsonBody, async (req, res) => {
       const x = Math.max(0, Math.min(LOGIN_VIEWPORT.width, Number(action.x) || 0));
       const y = Math.max(0, Math.min(LOGIN_VIEWPORT.height, Number(action.y) || 0));
       await session.page.mouse.click(x, y);
+    } else if (action.type === 'password') {
+      const passwordValue = String(action.value || '').slice(0, 256);
+      if (!passwordValue) {
+        return res.status(400).json({ ok: false, code: 'PASSWORD_REQUIRED', error: 'Parola boş olamaz.' });
+      }
+      const passwordInput = session.page.locator(
+        'input[name="ePassword"], #ePassword_I, input[id*="ePassword"][type="password"]'
+      ).first();
+      await passwordInput.waitFor({ state: 'visible', timeout: 15_000 });
+      await passwordInput.fill(passwordValue);
+      await session.page.evaluate(value => {
+        if (typeof globalThis.ePassword?.SetValue === 'function') globalThis.ePassword.SetValue(value);
+      }, passwordValue);
+      await passwordInput.dispatchEvent('input');
+      await passwordInput.dispatchEvent('change');
+      await passwordInput.press('Tab');
     } else if (action.type === 'wheel') {
       const deltaY = Math.max(-1200, Math.min(1200, Number(action.deltaY) || 0));
       await session.page.mouse.wheel(0, deltaY);

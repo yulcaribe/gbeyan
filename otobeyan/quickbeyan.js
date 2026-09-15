@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.6.0i';
+const QUICKBEYAN_VERSION = '1.6.0j';
 
 const state = {
   busy: false,
@@ -65,7 +65,7 @@ function installStyles() {
     .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:2px;margin-top:4px;overflow-x:auto}.otobeyan-crew-row,.otobeyan-crew-columns{display:grid;grid-template-columns:26px minmax(118px,1.1fr) minmax(100px,1.1fr) minmax(110px,1.1fr) 58px 112px 70px minmax(125px,1.25fr) 28px;gap:4px;align-items:center;min-width:0}.otobeyan-crew-columns{padding:0 4px;color:#64748b;font-size:8px;font-weight:800;text-transform:uppercase}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:6px;padding:3px;background:#f8fafc}.otobeyan-crew-no{text-align:center;font-weight:800;color:#475569}.otobeyan-crew-field{min-width:0}.otobeyan-crew-field span{display:none}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;height:27px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:5px;background:#fff;padding:3px 5px;font:11px inherit;color:#0f172a}.otobeyan-remove-crew{border:0;background:#fee2e2;color:#991b1b;border-radius:5px;width:26px;height:25px;padding:0;cursor:pointer}.otobeyan-source-arrow{font-size:9px;color:#64748b;margin-top:3px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;padding:6px 9px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:repeat(4,minmax(115px,1fr)) auto;gap:6px;margin-top:4px;align-items:end}.otobeyan-review label{display:flex;flex-direction:column;gap:2px;font-size:8px;text-transform:uppercase;color:#64748b;font-weight:800}.otobeyan-review .otobeyan-inline-actions{margin:0;flex-wrap:nowrap}
     #otobeyanLiveSummary{padding:7px 12px;border-top:1px solid #cbd5e1;background:#eef2ff;color:#172554}.otobeyan-summary-main{font-size:12px;font-weight:900;letter-spacing:.01em}.otobeyan-summary-extra{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}.otobeyan-summary-chip{padding:2px 6px;border:1px solid #c7d2fe;border-radius:999px;background:#fff;font-size:9px;font-weight:800;color:#3730a3}
     #otobeyanJobStack{position:fixed;right:18px;bottom:18px;z-index:2600;width:min(370px,calc(100vw - 24px));display:flex;flex-direction:column-reverse;gap:10px;pointer-events:none}.otobeyan-job{pointer-events:auto;overflow:hidden;border:1px solid #ffffff90;border-radius:16px;background:#fffffff2;color:#0f172a;box-shadow:0 18px 50px #0f172a35;backdrop-filter:blur(18px) saturate(1.25);animation:otobeyanJobIn .28s cubic-bezier(.2,.8,.2,1)}.otobeyan-job-head{display:flex;align-items:center;gap:10px;padding:11px 12px 7px}.otobeyan-job-icon{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:#dbeafe;color:#1d4ed8;font-size:17px}.otobeyan-job-title{min-width:0;flex:1}.otobeyan-job-title strong{display:block;font-size:13px}.otobeyan-job-title span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;color:#64748b;font-size:10px}.otobeyan-job-close{display:none;border:0;background:transparent;color:#64748b;font:18px/1 inherit;cursor:pointer}.otobeyan-job-status{padding:0 12px 9px;font-size:11px;font-weight:700}.otobeyan-job-track{height:3px;background:#e2e8f0}.otobeyan-job-bar{height:100%;width:8%;background:linear-gradient(90deg,#2563eb,#60a5fa);transition:width .3s ease}.otobeyan-job-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:8px 10px 10px}.otobeyan-job-step{text-align:center;color:#94a3b8;font-size:8px;font-weight:800}.otobeyan-job-step::before{content:'';display:block;width:7px;height:7px;margin:0 auto 3px;border-radius:50%;background:#cbd5e1}.otobeyan-job-step.done,.otobeyan-job-step.current{color:#1d4ed8}.otobeyan-job-step.done::before{background:#22c55e}.otobeyan-job-step.current::before{background:#2563eb;box-shadow:0 0 0 4px #dbeafe}.otobeyan-job.success .otobeyan-job-icon{background:#dcfce7;color:#15803d}.otobeyan-job.success .otobeyan-job-bar{background:#22c55e}.otobeyan-job.success .otobeyan-job-status{color:#166534}.otobeyan-job.error .otobeyan-job-icon{background:#fee2e2;color:#b91c1c}.otobeyan-job.error .otobeyan-job-bar{background:#ef4444}.otobeyan-job.error .otobeyan-job-status{color:#991b1b}.otobeyan-job.success .otobeyan-job-close,.otobeyan-job.error .otobeyan-job-close{display:block}@keyframes otobeyanJobIn{from{opacity:0;transform:translateX(28px) scale(.97)}to{opacity:1;transform:none}}
-    #otobeyanCaptchaOverlay{position:fixed;inset:0;z-index:3200;display:none;align-items:center;justify-content:center;padding:12px;background:#020617d9;backdrop-filter:blur(5px)}#otobeyanCaptchaOverlay.open{display:flex}.otobeyan-captcha-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(1120px,calc(100vw - 24px));height:min(860px,calc(100dvh - 24px));overflow:hidden;border:1px solid #64748b;border-radius:15px;background:#0f172a;box-shadow:0 24px 80px #0009}.otobeyan-captcha-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;background:#172554;color:#fff}.otobeyan-captcha-head strong{font-size:14px}.otobeyan-captcha-head span{display:block;margin-top:2px;color:#c7d2fe;font-size:10px}.otobeyan-captcha-stage{display:grid;place-items:center;min-height:0;overflow:auto;padding:8px;background:#334155}.otobeyan-captcha-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain;background:#fff;cursor:crosshair;box-shadow:0 4px 20px #0007;user-select:none}.otobeyan-captcha-controls{display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;background:#172554}.otobeyan-captcha-controls button{border:1px solid #ffffff45;border-radius:7px;padding:6px 10px;background:#ffffff14;color:#fff;font:700 11px inherit;cursor:pointer}.otobeyan-captcha-controls button:disabled{opacity:.5;cursor:wait}.otobeyan-captcha-controls .danger{margin-left:auto;border-color:#ef444477;background:#7f1d1d}
+    #otobeyanCaptchaOverlay{position:fixed;inset:0;z-index:3200;display:none;align-items:center;justify-content:center;padding:12px;background:#020617d9;backdrop-filter:blur(5px)}#otobeyanCaptchaOverlay.open{display:flex}.otobeyan-captcha-panel{display:grid;grid-template-rows:auto minmax(0,1fr) auto;width:min(1120px,calc(100vw - 24px));height:min(860px,calc(100dvh - 24px));overflow:hidden;border:1px solid #64748b;border-radius:15px;background:#0f172a;box-shadow:0 24px 80px #0009}.otobeyan-captcha-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;background:#172554;color:#fff}.otobeyan-captcha-head strong{font-size:14px}.otobeyan-captcha-head span{display:block;margin-top:2px;color:#c7d2fe;font-size:10px}.otobeyan-captcha-stage{display:grid;place-items:center;min-height:0;overflow:auto;padding:8px;background:#334155}.otobeyan-captcha-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain;background:#fff;cursor:crosshair;box-shadow:0 4px 20px #0007;user-select:none}.otobeyan-captcha-controls{display:flex;align-items:center;justify-content:center;gap:7px;padding:9px;background:#172554}.otobeyan-captcha-password{width:min(230px,32vw);height:30px;box-sizing:border-box;border:1px solid #ffffff55;border-radius:7px;padding:5px 8px;background:#fff;color:#0f172a;font:11px inherit}.otobeyan-captcha-controls button{border:1px solid #ffffff45;border-radius:7px;padding:6px 10px;background:#ffffff14;color:#fff;font:700 11px inherit;cursor:pointer}.otobeyan-captcha-controls button:disabled{opacity:.5;cursor:wait}.otobeyan-captcha-controls .danger{margin-left:auto;border-color:#ef444477;background:#7f1d1d}
     @media(max-width:1000px){.otobeyan-crew-row,.otobeyan-crew-columns{grid-template-columns:26px 118px 100px 110px 58px 112px 70px 125px 28px;min-width:780px}.otobeyan-review{grid-template-columns:repeat(2,minmax(130px,1fr))}.otobeyan-review .otobeyan-inline-actions{grid-column:1/-1}}
     @media(max-width:720px){#otobeyanOverlay{padding:0}#otobeyanPanel{width:100%;height:100dvh;border-radius:0}.otobeyan-head{padding:8px 10px}.otobeyan-card{grid-template-columns:repeat(2,minmax(0,1fr))}#otobeyanLiveSummary{padding:6px 8px}#otobeyanJobStack{right:12px;bottom:12px}#otobeyanCaptchaOverlay{padding:0}.otobeyan-captcha-panel{width:100%;height:100dvh;border-radius:0}}
     @media(max-height:760px) and (min-width:721px){#otobeyanPanel{height:calc(100dvh - 8px)}.otobeyan-head{padding:7px 12px}#otobeyanMessages{padding:5px}.otobeyan-message{padding:4px 6px}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{height:25px}.otobeyan-crew-row{padding:2px}#otobeyanLiveSummary{padding:5px 10px}}
@@ -92,6 +92,8 @@ function installUi() {
         <header class="otobeyan-captcha-head"><div><strong>iGO Oturum Onayı</strong><span id="otobeyanCaptchaStatus">CAPTCHA’yı tamamlayıp Login düğmesine bas.</span></div></header>
         <div class="otobeyan-captcha-stage"><img id="otobeyanCaptchaFrame" alt="iGO CAPTCHA onay ekranı" draggable="false"></div>
         <footer class="otobeyan-captcha-controls">
+          <input id="otobeyanCaptchaPassword" class="otobeyan-captcha-password" type="password" placeholder="Parolayı yeniden gir" autocomplete="current-password" aria-label="iGO parolası">
+          <button type="button" data-captcha-password>Parolayı aktar</button>
           <button type="button" data-captcha-scroll="-650">↑ Yukarı</button>
           <button type="button" data-captcha-refresh>Yenile</button>
           <button type="button" data-captcha-scroll="650">↓ Aşağı</button>
@@ -466,10 +468,12 @@ async function approveIgoSession() {
   overlay.setAttribute('aria-hidden', 'false');
 
   return new Promise((resolve, reject) => {
-    const buttons = Array.from(overlay.querySelectorAll('button'));
+    const passwordInput = overlay.querySelector('#otobeyanCaptchaPassword');
+    const passwordButton = overlay.querySelector('[data-captcha-password]');
+    const controls = Array.from(overlay.querySelectorAll('button,input'));
     const setPending = value => {
       pending = value;
-      buttons.forEach(button => { button.disabled = value; });
+      controls.forEach(control => { control.disabled = value; });
       frame.style.opacity = value ? '.72' : '1';
       status.textContent = value ? 'Onay işleniyor…' : 'CAPTCHA’yı tamamlayıp Login düğmesine bas.';
     };
@@ -478,7 +482,11 @@ async function approveIgoSession() {
       overlay.setAttribute('aria-hidden', 'true');
       frame.removeAttribute('src');
       frame.onclick = null;
-      buttons.forEach(button => { button.onclick = null; });
+      if (passwordInput) {
+        passwordInput.value = '';
+        passwordInput.onkeydown = null;
+      }
+      controls.forEach(control => { control.onclick = null; });
     };
     const finish = (error = null) => {
       close();
@@ -524,6 +532,25 @@ async function approveIgoSession() {
     overlay.querySelectorAll('[data-captcha-scroll]').forEach(button => {
       button.onclick = () => send({ type: 'wheel', deltaY: Number(button.dataset.captchaScroll) || 0 });
     });
+    const transferPassword = () => {
+      const value = String(passwordInput?.value || '');
+      if (!value) {
+        status.textContent = 'Parolayı yazıp Parolayı aktar düğmesine bas.';
+        passwordInput?.focus();
+        return;
+      }
+      if (passwordInput) passwordInput.value = '';
+      send({ type: 'password', value });
+    };
+    if (passwordButton) passwordButton.onclick = transferPassword;
+    if (passwordInput) {
+      passwordInput.onkeydown = event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          transferPassword();
+        }
+      };
+    }
     overlay.querySelector('[data-captcha-cancel]').onclick = () => {
       api.cancelIgoSession?.(sessionId).catch(() => {});
       finish(new Error('iGO oturum onayı iptal edildi.'));

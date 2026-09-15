@@ -6,7 +6,7 @@ import { DurableObject } from 'cloudflare:workers';
 import mailWorker, { refreshMailCache } from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 
-const RELEASE_VERSION = '1.6.0i-cloudrun';
+const RELEASE_VERSION = '1.6.0j-cloudrun';
 const SESSION_OBJECT_NAME = 'primary-igo-session';
 const LOADSHEET_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const LOADSHEET_CACHE_RETENTION_MS = 36 * 60 * 60 * 1000;
