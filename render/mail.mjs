@@ -1,6 +1,6 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v1.7.3
+ * Version: v1.7.4
  * Production credentials come from server environment variables.
  * Credentials stay on the server.
  */
@@ -457,11 +457,6 @@ function oldMessages(messages, hours, now = Date.now()) {
   });
 }
 
-function isManagedTrashMessage(message) {
-  const hasCrewAttachment = (message.attachments || []).some(attachment => crewAttachmentExtension(attachment.name));
-  return hasCrewAttachment || Boolean(parseLdmMessage(message)) || Boolean(parseTripInfoMessage(message));
-}
-
 async function cleanOldMail(alias, password, results, previous, hours = DEFAULT_LOOKBACK_HOURS) {
   const now = Date.now();
   const cleanup = {
@@ -500,7 +495,6 @@ async function cleanOldMail(alias, password, results, previous, hours = DEFAULT_
   try {
     const trash = await loadMessages(alias, password, trashFolder);
     const trashIds = oldMessages(trash.messages, hours, now)
-      .filter(isManagedTrashMessage)
       .map(message => message.id);
     cleanup.trashDeleted = await permanentlyDeleteMessages(alias, password, trash, trashIds);
   } catch (error) {

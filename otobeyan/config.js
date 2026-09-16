@@ -2,7 +2,7 @@
   'use strict';
 
   global.OTOBEYAN_CONFIG = Object.freeze({
-    releaseVersion: '1.7.3',
+    releaseVersion: '1.7.4',
     apiUrl: 'https://gbeyan-api.onrender.com',
     mailLookbackHours: 15
   });

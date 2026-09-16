@@ -56,8 +56,8 @@ ortak kullanılır. Eşzamanlı taramalar aynı promise'i bekler; her personel i
 ayrı Exchange taraması başlatılmaz. Sunucu uyurken mail kontrolü yapılmaz.
 Yeni istek geldiğinde gerekiyorsa son 15 saat yeniden taranır. GenDec, LDM ve
 Trip Info klasörlerinde 15 saatten eski mesajlar kalıcı silinir. Çöp Kutusu
-saatte en fazla bir kez taranır ve yalnızca bu üç veri türüyle eşleşen eski
-mesajlar kalıcı olarak temizlenir.
+saatte en fazla bir kez taranır ve 15 saatten eski tüm mesajlar, türüne
+bakılmadan kalıcı olarak temizlenir.
 
 Snapshot ve panelden değiştirilen klasör ayarları bellektedir; sunucu yeniden
 başladığında kaybolur. Kalmasını istediğin klasör yollarını Render Environment

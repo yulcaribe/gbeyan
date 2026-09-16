@@ -7,7 +7,7 @@ import mailService from './mail.mjs';
 import PRIVATE_PAGE from './private-page.mjs';
 import { MailStore } from './mail-store.mjs';
 
-const VERSION = '1.7.3-mail-render';
+const VERSION = '1.7.4-mail-render';
 const HEADERS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',

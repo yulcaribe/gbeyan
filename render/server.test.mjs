@@ -33,7 +33,7 @@ function wbxml(root) { return new Uint8Array([3, 1, 106, 0, ...root]); }
 function exchangeResponse(root) {
   return new Response(wbxml(root), { headers: { 'Content-Type': 'application/vnd.ms-sync.wbxml' } });
 }
-function fakeExchange(t, { failFirst = false, pause = null, messageDate = null, trashMessageDate = null } = {}) {
+function fakeExchange(t, { failFirst = false, pause = null, messageDate = null, trashMessageDate = null, trashManaged = true } = {}) {
   const original = globalThis.fetch;
   t.after(() => { globalThis.fetch = original; });
   const calls = [];
@@ -68,11 +68,12 @@ function fakeExchange(t, { failFirst = false, pause = null, messageDate = null, 
         ? (trashMessageDate || messageDate || new Date().toISOString())
         : (messageDate || new Date().toISOString());
       const messageId = isTrash ? 'trash-message-1' : 'message-1';
+      const managedMessage = !isTrash || trashManaged;
       const message = element(0, 7, [element(0, 13, text(messageId)), element(0, 29, [
-        element(2, 20, text('XQ154 GenDec')), element(2, 24, text('crew@example.test')),
+        element(2, 20, text(managedMessage ? 'XQ154 GenDec' : 'Unrelated deleted mail')), element(2, 24, text('crew@example.test')),
         element(2, 15, text(receivedAt)),
-        element(17, 14, element(17, 15, [element(17, 16, text('XQ154.pdf')),
-          element(17, 17, text('file-1')), element(2, 8, text('15'))]))
+        ...(managedMessage ? [element(17, 14, element(17, 15, [element(17, 16, text('XQ154.pdf')),
+          element(17, 17, text('file-1')), element(2, 8, text('15'))]))] : [])
       ])]);
       return exchangeResponse(element(0, 5, element(0, 28, element(0, 15, [
         element(0, 14, text('1')), element(0, 11, text('sync-1')),
@@ -180,9 +181,9 @@ test('missing server secrets fail without contacting Exchange', async t => {
   assert.equal((await request('/api/mail/messages')).status, 503);
 });
 
-test('mail refresh permanently removes managed messages older than 15 hours from source and trash', async t => {
+test('mail refresh removes old source mail and every old trash message regardless of type', async t => {
   const oldDate = new Date(Date.now() - 16 * 60 * 60 * 1000).toISOString();
-  const calls = fakeExchange(t, { messageDate: oldDate, trashMessageDate: oldDate });
+  const calls = fakeExchange(t, { messageDate: oldDate, trashMessageDate: oldDate, trashManaged: false });
   const request = await start(t, env, new MailStore());
   const response = await request('/api/mail/messages');
   assert.equal(response.status, 200);
