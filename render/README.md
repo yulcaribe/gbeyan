@@ -37,10 +37,12 @@ Statik siteye verdiğin `SKIP_INSTALL_DEPS` bu servis için gerekli değildir.
 ## Uygulamaya bağlama
 
 Yayın bittikten sonra Render'ın verdiği gerçek API adresini al.
-`otobeyan/config.js` içindeki `workerUrl` bu adresle değiştirilmeli,
+`otobeyan/config.js` içindeki `apiUrl` bu adresle değiştirilmeli,
 ardından `otobeyan/loader.js` içindeki config hash'i ve `index.html` içindeki
 loader hash'i yeniden hesaplanmalıdır. Bu adım tamamlanana kadar istemci
 mevcut API adresini kullanmaya devam eder.
+
+Mevcut API adresi `https://gbeyan-api.onrender.com` olarak ayarlanmıştır.
 
 `/` adresi mevcut mail veri ekranını açar. `/healthz` yalnızca sunucunun ayakta
 olduğunu gösterir; Exchange bağlantısını doğrulamaz. API anahtarıyla

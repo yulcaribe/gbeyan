@@ -134,10 +134,14 @@ export function createBackend(env = process.env, store = new MailStore()) {
         ...(!['GET', 'HEAD'].includes(incoming.method) && size ? { body: Buffer.concat(chunks) } : {})
       });
       const response = await orderedDispatch(request, incoming.socket.remoteAddress || 'unknown');
-      const responseHeaders = { ...HEADERS, ...Object.fromEntries(response.headers), Vary: 'Origin' };
-      delete responseHeaders['access-control-allow-origin'];
-      if (origin && origins.has(origin)) responseHeaders['Access-Control-Allow-Origin'] = origin;
-      outgoing.writeHead(response.status, responseHeaders);
+      // Headers merges names case-insensitively, so the HTML policy replaces
+      // the API default instead of sending two independently enforced policies.
+      const responseHeaders = new Headers(HEADERS);
+      response.headers.forEach((value, name) => responseHeaders.set(name, value));
+      responseHeaders.set('Vary', 'Origin');
+      responseHeaders.delete('Access-Control-Allow-Origin');
+      if (origin && origins.has(origin)) responseHeaders.set('Access-Control-Allow-Origin', origin);
+      outgoing.writeHead(response.status, Object.fromEntries(responseHeaders));
       if (response.body && incoming.method !== 'HEAD') await pipeline(Readable.fromWeb(response.body), outgoing);
       else outgoing.end();
     } catch {

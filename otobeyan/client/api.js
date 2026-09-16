@@ -7,15 +7,15 @@
   function config() {
     const value = global.OTOBEYAN_CONFIG || {};
     return {
-      workerUrl: String(value.workerUrl || '').replace(/\/+$/, ''),
+      apiUrl: String(value.apiUrl || '').replace(/\/+$/, ''),
       mailLookbackHours: 6
     };
   }
 
   function endpoint(path) {
-    const { workerUrl } = config();
-    if (!workerUrl) throw new Error('Servis adresi tanımlı değil.');
-    return `${workerUrl}${path}`;
+    const { apiUrl } = config();
+    if (!apiUrl) throw new Error('Servis adresi tanımlı değil.');
+    return `${apiUrl}${path}`;
   }
 
   function headers(extra = {}) {

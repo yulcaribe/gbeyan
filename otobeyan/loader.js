@@ -5,8 +5,8 @@
   const baseUrl = loaderUrl.slice(0, loaderUrl.lastIndexOf('/') + 1);
   const buildVersion = new URL(loaderUrl, location.href).searchParams.get('v') || '1.7.1';
   const integrity = Object.freeze({
-    'config.js': 'sha384-ObPwKzoOkAkVXNnLSuO3MfX6LEay2Zy+j7q+oEVK4jO/1U8xHJ1Nrnh4q3HaEP17',
-    'client/api.js': 'sha384-D3Ziw+O5S8ybY0lWLfceZPRTWY9jqPDl1oJp6ssmmfHGNbFuEWjRvLs2WZU6i3n1',
+    'config.js': 'sha384-Go/ReEqJ0od6ZpbbI69V+9o0rxrCZxVeJyz8hRVrPD4OB0G1+9Rd3gYsD5EE7Qzx',
+    'client/api.js': 'sha384-THpp/dAyg7WWr9s9Yxe/In7L58JIycdt0YyfyyeDtQTiJaiJlBMGT85ybv4Ithdx',
     'quickbeyan.js': 'sha384-ckbx4AYWONpNL5Dt1Gzc3xxW1mglAw9EBc3aQru6FIeixh/nFJsS4VMM3ZCcrUPM'
   });
   let featureScriptPromise = null;

@@ -3,7 +3,7 @@
 
   global.OTOBEYAN_CONFIG = Object.freeze({
     releaseVersion: '1.7.1',
-    workerUrl: 'https://igo.yulcaribe.workers.dev',
+    apiUrl: 'https://gbeyan-api.onrender.com',
     mailLookbackHours: 6
   });
 })(globalThis);

@@ -18,7 +18,7 @@ async function start(t, settings = env, store = new MailStore()) {
       path, method, headers }, response => {
       const chunks = [];
       response.on('data', chunk => chunks.push(chunk));
-      response.on('end', () => resolve({ status: response.statusCode, headers: response.headers,
+      response.on('end', () => resolve({ status: response.statusCode, headers: response.headers, rawHeaders: response.rawHeaders,
         body: Buffer.concat(chunks), json() { return JSON.parse(this.body); } }));
     });
     request.on('error', reject); request.end(body);
@@ -98,6 +98,8 @@ test('health, key checks, local/hosted CORS, preflight and rate limit', async t 
   const page = await request('/', {});
   assert.equal(page.status, 200);
   assert.match(page.headers['content-security-policy'], /connect-src 'self'/);
+  assert.match(page.headers['content-security-policy'], /script-src 'unsafe-inline'/);
+  assert.equal(page.rawHeaders.filter((name, index) => index % 2 === 0 && name.toLowerCase() === 'content-security-policy').length, 1);
 });
 
 test('simultaneous first requests scan once; expiry refreshes; attachment headers survive', async t => {

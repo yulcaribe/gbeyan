@@ -1,7 +1,7 @@
 # gbeyan statik sitesini Render'da yayınlama
 
-Bu kurulum arayüzü ve tarayıcı modüllerini yayınlar. Mail API'si henüz
-`otobeyan/config.js` dosyasındaki Cloudflare Worker adresini kullanır.
+Bu kurulum arayüzü ve tarayıcı modüllerini yayınlar. Mail API'si
+`otobeyan/config.js` dosyasındaki `https://gbeyan-api.onrender.com` adresini kullanır.
 
 ## Panelden kurulum
 
@@ -63,5 +63,4 @@ OtoBeyan scriptleri için gereklidir. Panelden Static Site oluşturulduysa
 `render.yaml` header kurallarını kendiliğinden uygulamaz; kural panelde eklenmelidir.
 Blueprint üzerinden kurulmuşsa `render.yaml` içinde zaten tanımlıdır.
 
-Mail/API adresi `otobeyan/config.js` içinde hâlâ Cloudflare Worker'dır;
-API taşıması bu statik dosya güncellemesinden ayrı yapılacaktır.
+Mail/API ayrı bir Web Service'tir. Kurulum ayrıntıları `render/README.md` içindedir.
