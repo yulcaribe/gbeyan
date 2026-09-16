@@ -33,10 +33,11 @@ function wbxml(root) { return new Uint8Array([3, 1, 106, 0, ...root]); }
 function exchangeResponse(root) {
   return new Response(wbxml(root), { headers: { 'Content-Type': 'application/vnd.ms-sync.wbxml' } });
 }
-function fakeExchange(t, { failFirst = false, pause = null } = {}) {
+function fakeExchange(t, { failFirst = false, pause = null, messageDate = null, trashMessageDate = null } = {}) {
   const original = globalThis.fetch;
   t.after(() => { globalThis.fetch = original; });
   const calls = [];
+  calls.deletions = [];
   globalThis.fetch = async (url, options) => {
     assert.equal(new URL(url).hostname, 'posta.tgs.aero');
     assert.match(options.headers.Authorization, /^Basic /);
@@ -48,14 +49,28 @@ function fakeExchange(t, { failFirst = false, pause = null } = {}) {
       if (pause) await pause();
       return exchangeResponse(element(7, 22, [element(7, 12, text('1')), element(7, 14, [
         element(7, 15, [element(7, 8, text('sxs')), element(7, 9, text('0')), element(7, 7, text('SXS'))]),
-        element(7, 15, [element(7, 8, text('gendec')), element(7, 9, text('sxs')), element(7, 7, text('GenDec'))])
+        element(7, 15, [element(7, 8, text('gendec')), element(7, 9, text('sxs')), element(7, 7, text('GenDec'))]),
+        element(7, 15, [element(7, 8, text('trash')), element(7, 9, text('0')), element(7, 7, text('Deleted Items')), element(7, 10, text('4'))])
       ])]));
     }
     if (cmd === 'Sync') {
+      const requestBytes = Buffer.from(options.body);
+      const deleting = requestBytes.includes(Buffer.from([0, 0, 9 | 64]));
+      const isTrash = requestBytes.includes(Buffer.from('trash'));
+      if (deleting) {
+        calls.deletions.push(isTrash ? 'trash' : 'configured');
+        return exchangeResponse(element(0, 5, element(0, 28, element(0, 15, [
+          element(0, 14, text('1')), element(0, 11, text('sync-2'))
+        ]))));
+      }
       const changes = Buffer.from(options.body).includes(Buffer.from([0, 0, 19 | 64]));
-      const message = element(0, 7, [element(0, 13, text('message-1')), element(0, 29, [
+      const receivedAt = isTrash
+        ? (trashMessageDate || messageDate || new Date().toISOString())
+        : (messageDate || new Date().toISOString());
+      const messageId = isTrash ? 'trash-message-1' : 'message-1';
+      const message = element(0, 7, [element(0, 13, text(messageId)), element(0, 29, [
         element(2, 20, text('XQ154 GenDec')), element(2, 24, text('crew@example.test')),
-        element(2, 15, text(new Date().toISOString())),
+        element(2, 15, text(receivedAt)),
         element(17, 14, element(17, 15, [element(17, 16, text('XQ154.pdf')),
           element(17, 17, text('file-1')), element(2, 8, text('15'))]))
       ])]);
@@ -105,15 +120,15 @@ test('health, key checks, local/hosted CORS, preflight and rate limit', async t 
 test('simultaneous first requests scan once; expiry refreshes; attachment headers survive', async t => {
   const calls = fakeExchange(t);
   const store = new MailStore(); const request = await start(t, env, store);
-  const responses = await Promise.all(Array.from({ length: 10 }, () => request('/api/mail/messages?hours=6')));
+  const responses = await Promise.all(Array.from({ length: 10 }, () => request('/api/mail/messages?hours=15')));
   for (const response of responses) {
     assert.equal(response.status, 200);
     assert.equal(response.json().gendecMessages[0].attachments[0].name, 'XQ154.pdf');
-    assert.equal(response.json().lookbackHours, 6);
+    assert.equal(response.json().lookbackHours, 15);
   }
-  assert.deepEqual(calls, ['FolderSync', 'Sync', 'Sync']);
+  assert.deepEqual([...calls], ['FolderSync', 'Sync', 'Sync', 'Sync', 'Sync']);
   assert.equal((await request('/api/mail/messages')).json().fromCache, true);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 5);
   const cachedAttachment = await request('/api/mail/flight-attachment?flightNo=XQ154&cache=1');
   assert.equal(cachedAttachment.status, 200);
   assert.equal(calls.filter(cmd => cmd === 'FolderSync').length, 1);
@@ -163,4 +178,18 @@ test('missing server secrets fail without contacting Exchange', async t => {
   const request = await start(t, { TEST_API_KEY: 'test-key' });
   assert.equal((await request('/api/auth/verify')).json().ready, false);
   assert.equal((await request('/api/mail/messages')).status, 503);
+});
+
+test('mail refresh permanently removes managed messages older than 15 hours from source and trash', async t => {
+  const oldDate = new Date(Date.now() - 16 * 60 * 60 * 1000).toISOString();
+  const calls = fakeExchange(t, { messageDate: oldDate, trashMessageDate: oldDate });
+  const request = await start(t, env, new MailStore());
+  const response = await request('/api/mail/messages');
+  assert.equal(response.status, 200);
+  const snapshot = response.json();
+  assert.equal(snapshot.lookbackHours, 15);
+  assert.equal(snapshot.gendecMessages.length, 0);
+  assert.equal(snapshot.cleanup.sourceDeleted, 1);
+  assert.equal(snapshot.cleanup.trashDeleted, 1);
+  assert.deepEqual(calls.deletions.sort(), ['configured', 'trash']);
 });

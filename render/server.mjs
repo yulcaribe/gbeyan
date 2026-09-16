@@ -7,7 +7,7 @@ import mailService from './mail.mjs';
 import PRIVATE_PAGE from './private-page.mjs';
 import { MailStore } from './mail-store.mjs';
 
-const VERSION = '1.7.2-mail-render';
+const VERSION = '1.7.3-mail-render';
 const HEADERS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -84,7 +84,7 @@ export function createBackend(env = process.env, store = new MailStore()) {
       const snapshot = await response.json();
       return json({ ok: true, version: VERSION,
         cachedAt: snapshot.cachedAt, expiresAt: snapshot.expiresAt,
-        settings: snapshot.settings, folderStatus: snapshot.folderStatus,
+        settings: snapshot.settings, folderStatus: snapshot.folderStatus, cleanup: snapshot.cleanup,
         flights: snapshot.flights || [], parsed: snapshot.parsed || { ldm: [], tripInfo: [] },
         genDec: (snapshot.gendecMessages || snapshot.messages || []).map(message => ({
           date: message.date || '', subject: message.subject || '', from: message.from || '',

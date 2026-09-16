@@ -1,14 +1,14 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.7.2';
+  const CLIENT_VERSION = '1.7.3';
   let accessCode = '';
 
   function config() {
     const value = global.OTOBEYAN_CONFIG || {};
     return {
       apiUrl: String(value.apiUrl || '').replace(/\/+$/, ''),
-      mailLookbackHours: 6
+      mailLookbackHours: 15
     };
   }
 
@@ -77,7 +77,7 @@
   }
 
   async function recentMail() {
-    return jsonRequest('/api/mail/messages?hours=6');
+    return jsonRequest('/api/mail/messages?hours=15');
   }
 
   async function flightAttachment(flightNumber, options = {}) {
@@ -85,7 +85,7 @@
     if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(normalized)) {
       throw new Error('Sefer numarası XQ254 biçiminde olmalı.');
     }
-    const params = new URLSearchParams({ flightNo: normalized, hours: '6' });
+    const params = new URLSearchParams({ flightNo: normalized, hours: '15' });
     if (options.cacheOnly) params.set('cache', '1');
     const response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), {
       cache: 'no-store',
@@ -102,7 +102,8 @@
   async function flightData(input) {
     const params = new URLSearchParams({
       flightNumber: String(input?.flightNumber || ''),
-      flightDate: String(input?.flightDate || '')
+      flightDate: String(input?.flightDate || ''),
+      tailNumber: String(input?.tailNumber || '')
     });
     return jsonRequest(`/api/mail/flight-data?${params}`);
   }

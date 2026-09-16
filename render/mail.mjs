@@ -1,10 +1,10 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v1.7.2
+ * Version: v1.7.3
  * Production credentials come from server environment variables.
  * Credentials stay on the server.
  */
-import { buildFlightRecords, normalizeDate, normalizeFlightNumber, parseLdmMessage, parseTripInfoMessage } from './mail-parsers.mjs';
+import { buildFlightRecords, normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage, parseTripInfoMessage } from './mail-parsers.mjs';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -17,8 +17,9 @@ const DEFAULT_FOLDER_SETTINGS = Object.freeze({
 });
 const WINDOW_SIZE = 100;
 const MAX_SYNC_PAGES = 5;
-const DEFAULT_LOOKBACK_HOURS = 6;
+const DEFAULT_LOOKBACK_HOURS = 15;
 const MAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const MAIL_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const CREW_ATTACHMENT_EXTENSIONS = Object.freeze(['.pdf', '.xlsx', '.xls']);
 const FLIGHT_CODE_ALIASES = Object.freeze({
   STW: '2S',
@@ -30,6 +31,7 @@ const FLIGHT_CODE_ALIASES = Object.freeze({
 const TAGS = {
   0: { 5:'Sync',6:'Responses',7:'Add',8:'Change',9:'Delete',10:'Fetch',11:'SyncKey',12:'ClientId',13:'ServerId',14:'Status',15:'Collection',16:'Class',18:'CollectionId',19:'GetChanges',20:'MoreAvailable',21:'WindowSize',22:'Commands',23:'Options',24:'FilterType',28:'Collections',29:'ApplicationData',30:'DeletesAsMoves',34:'MIMESupport',35:'MIMETruncation',40:'MaxItems' },
   2: { 5:'Attachment',6:'Attachments',7:'AttName',8:'AttSize',9:'Att0Id',10:'AttMethod',12:'Body',13:'BodySize',14:'BodyTruncated',15:'DateReceived',16:'DisplayName',17:'DisplayTo',18:'Importance',19:'MessageClass',20:'Subject',21:'Read',22:'To',23:'Cc',24:'From',25:'ReplyTo' },
+  5: { 5:'MoveItems',6:'Move',7:'SrcMsgId',8:'SrcFldId',9:'DstFldId',10:'Response',11:'Status',12:'DstMsgId' },
   7: { 7:'DisplayName',8:'ServerId',9:'ParentId',10:'Type',12:'Status',14:'Changes',15:'Add',16:'Delete',17:'Update',18:'SyncKey',19:'FolderCreate',20:'FolderDelete',21:'FolderUpdate',22:'FolderSync',23:'Count' },
   17: { 5:'BodyPreference',6:'Type',7:'TruncationSize',8:'AllOrNone',10:'Body',11:'Data',12:'EstimatedDataSize',13:'Truncated',14:'Attachments',15:'Attachment',16:'DisplayName',17:'FileReference',18:'Method',19:'ContentId',20:'ContentLocation',21:'IsInline',22:'NativeBodyType',23:'ContentType',24:'Preview' },
   20: { 5:'ItemOperations',6:'Fetch',7:'Store',8:'Options',9:'Range',10:'Total',11:'Properties',12:'Data',13:'Status',14:'Response',15:'Version',16:'Schema',17:'Part' },
@@ -154,6 +156,14 @@ function syncPayload(collectionId, syncKey, getChanges) {
 
   return document(tag(0, 5, tag(0, 28, tag(0, 15, collection))));
 }
+function deleteMessagesPayload(collectionId, syncKey, messageIds) {
+  return document(tag(0, 5, tag(0, 28, tag(0, 15, [
+    tag(0, 11, text(syncKey)),
+    tag(0, 18, text(collectionId)),
+    tag(0, 30, text('0')),
+    tag(0, 22, messageIds.map(messageId => tag(0, 9, tag(0, 13, text(messageId)))))
+  ]))));
+}
 async function folderRecords(alias, password) {
   const { tree } = await eas(alias, password, 'FolderSync', folderSyncPayload());
   return [...nodes(tree, 'Add'), ...nodes(tree, 'Update')]
@@ -252,6 +262,24 @@ async function loadMessages(alias, password, folder) {
 
   messages.sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return { folder, messages, syncKey, pages, moreAvailable, limit: WINDOW_SIZE * MAX_SYNC_PAGES };
+}
+async function permanentlyDeleteMessages(alias, password, loadedFolder, messageIds) {
+  let syncKey = loadedFolder.syncKey;
+  let deleted = 0;
+  const uniqueIds = [...new Set(messageIds.map(value => String(value || '')).filter(Boolean))];
+
+  for (let index = 0; index < uniqueIds.length; index += WINDOW_SIZE) {
+    const batch = uniqueIds.slice(index, index + WINDOW_SIZE);
+    const result = await eas(alias, password, 'Sync', deleteMessagesPayload(loadedFolder.folder.id, syncKey, batch));
+    const status = first(result.tree, 'Status');
+    if (status && status !== '1') throw new Error(`Exchange kalici silme hatasi: Status ${status}.`);
+    const nextSyncKey = first(result.tree, 'SyncKey');
+    if (!nextSyncKey) throw new Error('Exchange silme sonrasi SyncKey degerini vermedi.');
+    syncKey = nextSyncKey;
+    deleted += batch.length;
+  }
+  loadedFolder.syncKey = syncKey;
+  return deleted;
 }
 async function fetchAttachment(alias, password, attachmentId) {
   const { tree } = await eas(alias, password, 'ItemOperations', attachmentPayload(attachmentId));
@@ -418,7 +446,67 @@ async function loadConfiguredMessages(alias, password, settings) {
     if (result.status === 'fulfilled') byPath.set(path, result.value[1]);
     else errors[path] = result.reason instanceof Error ? result.reason.message : String(result.reason);
   });
-  return { byPath, errors };
+  return { byPath, errors, records };
+}
+
+function oldMessages(messages, hours, now = Date.now()) {
+  const cutoff = now - hours * 60 * 60 * 1000;
+  return (messages || []).filter(message => {
+    const receivedAt = Date.parse(message.date || '');
+    return Number.isFinite(receivedAt) && receivedAt < cutoff;
+  });
+}
+
+function isManagedTrashMessage(message) {
+  const hasCrewAttachment = (message.attachments || []).some(attachment => crewAttachmentExtension(attachment.name));
+  return hasCrewAttachment || Boolean(parseLdmMessage(message)) || Boolean(parseTripInfoMessage(message));
+}
+
+async function cleanOldMail(alias, password, results, previous, hours = DEFAULT_LOOKBACK_HOURS) {
+  const now = Date.now();
+  const cleanup = {
+    at: new Date(now).toISOString(),
+    cutoff: new Date(now - hours * 60 * 60 * 1000).toISOString(),
+    sourceDeleted: 0,
+    trashDeleted: 0,
+    errors: []
+  };
+
+  for (const [path, loaded] of results.byPath) {
+    const ids = oldMessages(loaded.messages, hours, now).map(message => message.id);
+    if (!ids.length) continue;
+    try {
+      cleanup.sourceDeleted += await permanentlyDeleteMessages(alias, password, loaded, ids);
+      loaded.messages = loaded.messages.filter(message => !ids.includes(message.id));
+    } catch (error) {
+      cleanup.errors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const lastTrashCleanup = Date.parse(previous?.cleanup?.trashAt || '');
+  if (Number.isFinite(lastTrashCleanup) && now - lastTrashCleanup < MAIL_CLEANUP_INTERVAL_MS) {
+    cleanup.trashAt = previous.cleanup.trashAt;
+    cleanup.trashSkipped = true;
+    return cleanup;
+  }
+  cleanup.trashAt = cleanup.at;
+
+  const trashFolder = results.records.find(folder => String(folder.type) === '4');
+  if (!trashFolder) {
+    cleanup.errors.push('Çöp Kutusu klasörü Exchange tarafından bulunamadı.');
+    return cleanup;
+  }
+
+  try {
+    const trash = await loadMessages(alias, password, trashFolder);
+    const trashIds = oldMessages(trash.messages, hours, now)
+      .filter(isManagedTrashMessage)
+      .map(message => message.id);
+    cleanup.trashDeleted = await permanentlyDeleteMessages(alias, password, trash, trashIds);
+  } catch (error) {
+    cleanup.errors.push(`Çöp Kutusu: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  return cleanup;
 }
 
 function recentParsed(records, hours, now = Date.now()) {
@@ -429,7 +517,7 @@ function recentParsed(records, hours, now = Date.now()) {
   });
 }
 
-function snapshotFrom(results, settings, hours, previous = null) {
+function snapshotFrom(results, settings, hours, previous = null, cleanup = null) {
   const cachedAt = new Date().toISOString();
   const recentFor = source => recentMessages(results.byPath.get(settings[source])?.messages || [], hours);
   const samePreviousSetting = source => previous?.settings?.[source] === settings[source];
@@ -465,7 +553,8 @@ function snapshotFrom(results, settings, hours, previous = null) {
     flights: buildFlightRecords(ldmRecords, tripInfoRecords),
     lookbackHours: hours,
     cachedAt,
-    expiresAt: new Date(Date.now() + MAIL_CACHE_TTL_MS).toISOString()
+    expiresAt: new Date(Date.now() + MAIL_CACHE_TTL_MS).toISOString(),
+    cleanup
   };
 }
 
@@ -474,13 +563,53 @@ function snapshotIsFresh(snapshot) {
     && Date.now() - Date.parse(snapshot.cachedAt) < MAIL_CACHE_TTL_MS;
 }
 
+function flightDataFromSnapshot(snapshot, flightNumber, flightDate, tailNumber) {
+  const tail = normalizeTail(tailNumber);
+  if (!tail) return null;
+  const exact = snapshot.flights?.find(item => item.key === `${flightNumber}|${flightDate}`) || null;
+  const base = (exact?.sources?.tripInfo || normalizeTail(exact?.tailNumber) === tail) ? exact : null;
+  const ldm = [...(snapshot.parsed?.ldm || [])]
+    .filter(item => item.flightNumber === flightNumber && normalizeTail(item.tailNumber) === tail)
+    .sort((left, right) => String(right.source?.receivedAt || '').localeCompare(String(left.source?.receivedAt || '')))[0] || null;
+
+  if (!base && !ldm) return null;
+  if (!ldm) return base;
+  const paxValid = ldm.validations?.paxMatchesMessage === true;
+  const confidence = paxValid ? 1 : 0.55;
+  const field = value => ({ value, source: ldm.source, confidence, validation: ldm.validations });
+
+  return {
+    ...(base || {
+      key: `${flightNumber}|${flightDate}`,
+      flightNumber,
+      flightDate,
+      originPortCode: '',
+      destinationPortCode: ldm.destinationPortCode || '',
+      fields: { blockFuelKg: { value: null, source: null, confidence: 0, validation: { available: false } } },
+      sources: { tripInfo: null },
+      validations: { blockFuel: false }
+    }),
+    tailNumber: base?.tailNumber || ldm.tailNumber,
+    cockpitCrew: base?.cockpitCrew ?? ldm.cockpitCrew ?? null,
+    cabinCrew: base?.cabinCrew ?? ldm.cabinCrew ?? null,
+    fields: {
+      ...(base?.fields || {}),
+      pax: field(ldm.pax),
+      infant: field(ldm.infant)
+    },
+    sources: { ...(base?.sources || {}), ldm: ldm.source },
+    validations: { ...(base?.validations || {}), pax: paxValid }
+  };
+}
+
 export async function refreshMailCache(env, cache, hours = DEFAULT_LOOKBACK_HOURS) {
   const alias = userAlias(env.EWS_USERNAME);
   if (!env.EWS_PASSWORD) throw new Error('EWS_PASSWORD secret eksik.');
   const settings = await currentSettings(env, cache);
   const previous = cache?.getMailSnapshot ? await cache.getMailSnapshot() : null;
   const results = await loadConfiguredMessages(alias, env.EWS_PASSWORD, settings);
-  const snapshot = snapshotFrom(results, settings, hours, previous);
+  const cleanup = await cleanOldMail(alias, env.EWS_PASSWORD, results, previous, hours);
+  const snapshot = snapshotFrom(results, settings, hours, previous, cleanup);
   if (cache?.saveMailSnapshot) await cache.saveMailSnapshot(snapshot);
   return snapshot;
 }
@@ -570,13 +699,14 @@ export default {
       if (route === '/api/flight-data') {
         const flightNumber = normalizeFlightNumber(url.searchParams.get('flightNumber'));
         const flightDate = normalizeDate(url.searchParams.get('flightDate'));
-        if (!flightNumber || !flightDate) return json({ error: 'Ucus numarasi veya tarih gecersiz.' }, 400);
+        const tailNumber = normalizeTail(url.searchParams.get('tailNumber'));
+        if (!flightNumber || !flightDate || !tailNumber) return json({ error: 'Ucus numarasi, tarih veya kuyruk gecersiz.' }, 400);
         const snapshot = await getSnapshot(DEFAULT_LOOKBACK_HOURS);
-        const flight = snapshot.flights?.find(item => item.key === `${flightNumber}|${flightDate}`) || null;
+        const flight = flightDataFromSnapshot(snapshot, flightNumber, flightDate, tailNumber);
         return json({
           ok: true,
           status: flight ? 'ready' : 'not_found',
-          query: { flightNumber, flightDate },
+          query: { flightNumber, flightDate, tailNumber },
           flight,
           cachedAt: snapshot.cachedAt,
           folderStatus: snapshot.folderStatus

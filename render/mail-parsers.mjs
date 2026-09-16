@@ -13,7 +13,7 @@ export function normalizeDate(value) {
   return match ? `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}` : '';
 }
 
-function normalizeTail(value) {
+export function normalizeTail(value) {
   const compact = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return compact.startsWith('TC') && compact.length > 2 ? `TC-${compact.slice(2)}` : compact;
 }
@@ -135,15 +135,27 @@ function valueField(value, sourceRecord, confidence, validation) {
 }
 
 export function buildFlightRecords(ldmRecords = [], tripInfoRecords = []) {
-  const keys = new Set([
-    ...ldmRecords.map(record => record.key),
-    ...tripInfoRecords.map(record => record.key)
-  ].filter(Boolean));
+  const tripKeys = new Set(tripInfoRecords.map(record => record.key).filter(Boolean));
+  const standaloneLdmKeys = new Set(ldmRecords
+    .filter(ldm => !tripInfoRecords.some(trip =>
+      trip.flightNumber === ldm.flightNumber
+      && normalizeTail(trip.tailNumber)
+      && normalizeTail(trip.tailNumber) === normalizeTail(ldm.tailNumber)
+    ))
+    .map(record => record.key)
+    .filter(Boolean));
+  const keys = new Set([...tripKeys, ...standaloneLdmKeys]);
 
   return [...keys].map(key => {
-    const ldm = newest(ldmRecords.filter(record => record.key === key));
     const trip = newest(tripInfoRecords.filter(record => record.key === key));
     const [flightNumber, flightDate] = key.split('|');
+    const tripTail = normalizeTail(trip?.tailNumber);
+    const ldm = newest(ldmRecords.filter(record => trip
+      ? record.flightNumber === trip.flightNumber
+        && tripTail
+        && normalizeTail(record.tailNumber) === tripTail
+      : record.key === key
+    ));
     const paxValid = ldm?.validations?.paxMatchesMessage === true;
     const fuelValid = trip?.validations?.blockFuelPositive === true
       && trip?.validations?.blockFuelMatchesTakeOffPlusTaxi !== false;

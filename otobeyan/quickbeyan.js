@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.7.2';
+const QUICKBEYAN_VERSION = '1.7.3';
 
 const state = {
   busy: false,
@@ -514,7 +514,8 @@ async function runMailDataQuery(context) {
     try {
       const result = await globalThis.OtoBeyanApi.flightData({
         flightNumber: context.flightNumber,
-        flightDate: context.flightDate
+        flightDate: context.flightDate,
+        tailNumber: context.tailNumber
       });
       renderMailDataResult(result);
     } catch (_) {
@@ -529,7 +530,7 @@ function renderMailDataResult(result) {
   state.mailDataResult = result;
   const flight = result.flight;
   if (!flight) {
-    addMessage('Son 6 saatte bu uçuş için LDM veya Trip Info bulunamadı. Bilgileri elle girebilirsin.', 'error');
+    addMessage('Son 15 saatte bu uçuş için LDM veya Trip Info bulunamadı. Bilgileri elle girebilirsin.', 'error');
     return;
   }
   const field = name => flight.fields?.[name]?.value;
