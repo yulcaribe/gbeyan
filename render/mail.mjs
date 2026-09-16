@@ -1,6 +1,6 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v1.7.1
+ * Version: v1.7.2
  * Production credentials come from server environment variables.
  * Credentials stay on the server.
  */
@@ -544,7 +544,16 @@ export default {
       if (route === '/api/flight-attachment' || route === '/api/flight-pdf') {
         const flightNo = url.searchParams.get('flightNo');
         const hours = lookbackHours(url);
-        const snapshot = await getSnapshot(hours);
+        const cacheOnly = url.searchParams.get('cache') === '1';
+        const stored = cacheOnly && services.mailCache?.getMailSnapshot
+          ? await services.mailCache.getMailSnapshot()
+          : null;
+        if (cacheOnly && !stored) {
+          return json({ error: 'Mail önbelleği henüz hazır değil. Önce mail verisini yenile.' }, 409);
+        }
+        const snapshot = cacheOnly
+          ? { ...stored, gendecMessages: recentMessages(stored.gendecMessages || stored.messages, hours) }
+          : await getSnapshot(hours);
         const match = findFlightAttachment(snapshot.gendecMessages || snapshot.messages, flightNo);
         if (!match) {
           return json({

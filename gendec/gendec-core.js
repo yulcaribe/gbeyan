@@ -1,5 +1,5 @@
 /*
- * Version: v1.7.1
+ * Version: v1.7.2
  * Genel GENDEC beyan kodu.
  * Modal, PDF/Excel okuma, HGSB ekip beyan gönderimi ve generic fallback parser burada kalır.
  * Havayoluya özel parserlar ayrı dosyalardadır: noz.js, rys.js, sxs.js.
@@ -132,6 +132,10 @@ function resetCrewModalBody() {
         + Manuel Ekip Ekle
       </button>
 
+      <button type="button" class="btn btn-secondary crew-mail-btn" onclick="loadCrewFromMailCache(this)">
+        ✉ Mailden Ekip Çek
+      </button>
+
       <button type="button" class="btn btn-outline crew-query-btn" onclick="queryExistingCrews()">
         🔍 Ekip Sorgula
       </button>
@@ -259,7 +263,7 @@ function ensureCrewStyles() {
   style.textContent = `
     .crew-upload-row {
       display: grid;
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: minmax(220px,1fr) auto auto auto;
       gap: 10px;
       align-items: end;
       margin-bottom: 12px;
@@ -270,7 +274,8 @@ function ensureCrewStyles() {
     }
 
     .crew-query-btn,
-    .crew-manual-btn {
+    .crew-manual-btn,
+    .crew-mail-btn {
       height: 36px;
       justify-content: center;
       white-space: nowrap;
@@ -398,7 +403,8 @@ function ensureCrewStyles() {
       }
 
       .crew-query-btn,
-      .crew-manual-btn {
+      .crew-manual-btn,
+      .crew-mail-btn {
         width: 100%;
       }
 
@@ -456,7 +462,46 @@ async function handleCrewFileSelect(event) {
   document.getElementById('crewSubmitBtn').disabled = true;
 }
 
-const FHY_PARSER_CDN_URL = 'https://gbeyan.onrender.com/gendec/fhy.js?v=1.7.1';
+async function loadCrewFromMailCache(button) {
+  const d = _currentFlightDetail || {};
+  const flightNumber = String(d.flightNumber || '').trim();
+  const api = globalThis.OtoBeyanApi;
+
+  if (!flightNumber) {
+    setCrewStatus('error', 'Uçuş numarası bulunamadı.');
+    return;
+  }
+  if (!api?.cachedFlightAttachment) {
+    setCrewStatus('error', 'Mail servisi açık değil. Önce erişim anahtarıyla Hızlı Beyan bağlantısını aç.');
+    return;
+  }
+
+  const originalText = button?.textContent || '✉ Mailden Ekip Çek';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Mail önbelleği aranıyor...';
+  }
+  setCrewStatus('info', `${flightNumber} için önbellekteki GenDec aranıyor...`);
+
+  try {
+    const attachment = await api.cachedFlightAttachment(flightNumber);
+    const fileName = attachment.fileName || `${flightNumber}.pdf`;
+    const file = new File([attachment.blob], fileName, {
+      type: attachment.blob.type || 'application/octet-stream',
+      lastModified: Date.now()
+    });
+    await handleCrewFileSelect({ target: { files: [file] } });
+  } catch (error) {
+    setCrewStatus('error', 'Mail önbelleğinden ekip alınamadı: ' + error.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+const FHY_PARSER_CDN_URL = 'https://gbeyan.onrender.com/gendec/fhy.js?v=1.7.2';
 let _fhyParserLoadPromise = null;
 
 function getFhyParserContext() {
@@ -1322,9 +1367,12 @@ function renderCrewPreview() {
       <div style="font-size:13px;color:#334155">
         <strong>${_crewParsedList.length}</strong> ekip bulundu. Göndermeden önce kontrol et.
       </div>
-      <button class="btn btn-secondary" style="padding:6px 10px" onclick="crewAddEmptyRow()">
-        + Manuel Ekip Ekle
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-secondary" style="padding:6px 10px" onclick="crewAddEmptyRow()">+ Manuel Ekip Ekle</button>
+        ${_crewParsedList.some(crew => normalizeCrewExcelType(crew.crewTypeCode) === 'CP')
+          ? '<button class="btn btn-outline" style="padding:6px 10px" onclick="updateCaptainFromGendec(this)">Kaptanı GenDec’ten Güncelle</button>'
+          : ''}
+      </div>
     </div>
 
     <div class="crew-card-list">
@@ -1484,6 +1532,53 @@ function crewAddEmptyRow() {
 
   renderCrewPreview();
   document.getElementById('crewSubmitBtn').disabled = false;
+}
+
+async function updateCaptainFromGendec(button) {
+  const captain = _crewParsedList.find(crew => normalizeCrewExcelType(crew.crewTypeCode) === 'CP');
+  const captainName = [captain?.name, captain?.surname].map(normalizePersonName).filter(Boolean).join(' ');
+  const d = _currentFlightDetail;
+
+  if (!d?.id || !d?.baseId) {
+    setCrewStatus('error', 'Uçuşun id/baseId bilgisi eksik. Detayı yeniden aç.');
+    return;
+  }
+  if (!captainName) {
+    setCrewStatus('error', 'GenDec listesinde kaptan adı bulunamadı.');
+    return;
+  }
+  if (!confirm(`Kaptan adı “${captainName}” olarak güncellensin mi?`)) return;
+
+  const originalText = button?.textContent || 'Kaptanı GenDec’ten Güncelle';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Güncelleniyor...';
+  }
+  setCrewStatus('info', 'Kaptan adı HGSB uçuş kaydında güncelleniyor...');
+
+  try {
+    const payload = {
+      ...d,
+      authAgentNameSurname: STATE.user.userName || d.authAgentNameSurname || '',
+      declarant: STATE.user.taxFirmName || d.declarant || '',
+      captainNameSurname: captainName,
+      crewNumber: _crewParsedList.length
+    };
+    const res = await apiCall('PUT', '/api/Flight/SetFlight?api-version=1.0', payload);
+    _currentFlightDetail = res?.data || res || payload;
+    _currentFlightBaseId = _currentFlightDetail.baseId || d.baseId;
+    setCrewStatus('success', `Kaptan adı ${captainName} olarak güncellendi.`);
+    await refreshHGBSFlightsForRows();
+    if (typeof syncRowsWithHGBSHistory === 'function') syncRowsWithHGBSHistory();
+    if (STATE.rows.length) renderTable();
+  } catch (error) {
+    setCrewStatus('error', 'Kaptan adı güncellenemedi: ' + error.message);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
 }
 
 // ─────────────────────────────────────────────

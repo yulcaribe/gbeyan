@@ -114,6 +114,9 @@ test('simultaneous first requests scan once; expiry refreshes; attachment header
   assert.deepEqual(calls, ['FolderSync', 'Sync', 'Sync']);
   assert.equal((await request('/api/mail/messages')).json().fromCache, true);
   assert.equal(calls.length, 3);
+  const cachedAttachment = await request('/api/mail/flight-attachment?flightNo=XQ154&cache=1');
+  assert.equal(cachedAttachment.status, 200);
+  assert.equal(calls.filter(cmd => cmd === 'FolderSync').length, 1);
   const attachment = await request('/api/mail/flight-attachment?flightNo=XQ154');
   assert.equal(attachment.status, 200);
   assert.equal(attachment.body.toString(), '%PDF-1.4 test');

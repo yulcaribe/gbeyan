@@ -1,4 +1,4 @@
-/* HGBS countries data | version: v1.7.1 */
+/* HGBS countries data | version: v1.7.2 */
 (function exposeHGBSCountries(global) {
   'use strict';
 
