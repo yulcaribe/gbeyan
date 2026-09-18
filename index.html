@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HGBS</title>
-  <meta name="app-version" content="v1.8.7">
+  <meta name="app-version" content="v1.8.8">
   <link rel="stylesheet" href="/style.css?v=1.8.7">
 </head>
 <body>
@@ -15,7 +15,7 @@
   <div class="login-card">
     <h1>TGS HGSB Gönderim</h1>
     <p>Devam etmek için sisteme giriş yapın.</p>
-    <span class="app-version-badge">v1.8.7</span>
+    <span class="app-version-badge">v1.8.8</span>
 
     <div id="loginAlert"></div>
 
@@ -55,7 +55,7 @@
       </div>
     </div>
     <div class="topbar-right">
-      <span class="app-version-badge">v1.8.7</span>
+      <span class="app-version-badge">v1.8.8</span>
       <button id="logoutBtn" onclick="logout()">Çıkış Yap</button>
     </div>
   </div>
@@ -399,7 +399,7 @@
  
 <!-- ══════════════════════ PDF READER MIN CDN JS ══════════════════════ -->
 <script src="/datas/countries.js?v=1.8.7"></script>
-<script src="/vendor/pdfjs/pdf.min.js?v=3.11.174"></script>
+<script src="https://gbeyan.yulcaribe.com/vendor/pdfjs/pdf.min.js?v=3.11.174"></script>
 
 <!-- ══════════════════════ MAIN SCRIPTS ══════════════════════ -->
 <script>
@@ -410,7 +410,7 @@
 //  Constants
 // ─────────────────────────────────────────────
 const MOCK_MODE    = false;   // ← test MOD
-const APP_VERSION  = 'v1.8.7';
+const APP_VERSION  = 'v1.8.8';
 const BASE_URL     = 'https://hgbsapi.ticaret.gov.tr';
 const KEY_TOKEN    = 'tgs_bearer';
 const KEY_USER     = 'tgs_user';
@@ -4166,11 +4166,11 @@ init();
 
 
 
-<script> pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js?v=3.11.174'; </script>
+<script> pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://gbeyan.yulcaribe.com/vendor/pdfjs/pdf.worker.min.js?v=3.11.174'; </script>
 
 <script src="/gendec/fhy.js?v=1.8.7"></script>
 
-<script src="/vendor/xlsx/xlsx.full.min.js?v=0.18.5"></script>
+<script src="https://gbeyan.yulcaribe.com/vendor/xlsx/xlsx.full.min.js?v=0.18.5"></script>
 
 <!-- CREWDEC GENDEC SCRIPT -->
 <script src="/gendec/parser.js?v=1.8.7"></script>
