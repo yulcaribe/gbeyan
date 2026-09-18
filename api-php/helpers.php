@@ -103,6 +103,47 @@ function gb_has_access(array $config): bool
     return hash_equals($key, substr($header, 7));
 }
 
+function gb_request_origin(): string
+{
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? ''));
+    if ($host === '') {
+        return '';
+    }
+
+    $forwardedProto = trim((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+    if ($forwardedProto !== '') {
+        $scheme = strtolower(trim(explode(',', $forwardedProto)[0]));
+    } else {
+        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+        $scheme = ($https !== '' && $https !== 'off' && $https !== '0') ? 'https' : 'http';
+    }
+
+    if ($scheme !== 'http' && $scheme !== 'https') {
+        return '';
+    }
+
+    return $scheme . '://' . strtolower($host);
+}
+
+function gb_origin_allowed(array $config): bool
+{
+    $origin = rtrim(gb_header_value('Origin'), '/');
+    if ($origin === '') {
+        return true;
+    }
+
+    $allowed = array_map(
+        static fn(mixed $value): string => rtrim((string) $value, '/'),
+        $config['allowed_origins'] ?? []
+    );
+    if (in_array($origin, $allowed, true)) {
+        return true;
+    }
+
+    $requestOrigin = rtrim(gb_request_origin(), '/');
+    return $requestOrigin !== '' && hash_equals($requestOrigin, $origin);
+}
+
 function gb_apply_common_headers(array $config): void
 {
     header('Access-Control-Allow-Headers: Authorization, Content-Type');
@@ -116,16 +157,10 @@ function gb_apply_common_headers(array $config): void
     header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'");
     header('Vary: Origin');
 
-    $origin = gb_header_value('Origin');
-    if ($origin !== '' && in_array($origin, $config['allowed_origins'] ?? [], true)) {
+    $origin = rtrim(gb_header_value('Origin'), '/');
+    if ($origin !== '' && gb_origin_allowed($config)) {
         header('Access-Control-Allow-Origin: ' . $origin);
     }
-}
-
-function gb_origin_allowed(array $config): bool
-{
-    $origin = gb_header_value('Origin');
-    return $origin === '' || in_array($origin, $config['allowed_origins'] ?? [], true);
 }
 
 function gb_send_json(array $data, int $status = 200): never
