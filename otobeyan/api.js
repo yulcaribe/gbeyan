@@ -110,10 +110,25 @@
     if (Number.isInteger(options.candidateIndex) && options.candidateIndex > 0) {
       params.set('candidate', String(options.candidateIndex));
     }
-    const response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), {
+    const requestOptions = {
       cache: 'no-store',
       headers: headers()
-    });
+    };
+
+    let response;
+    try {
+      response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
+    } catch (error) {
+      if (!IS_LOCAL_FILE || apiUrl === LOCAL_FALLBACK_API) throw error;
+      apiUrl = LOCAL_FALLBACK_API;
+      response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
+    }
+
+    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && response.status >= 500) {
+      apiUrl = LOCAL_FALLBACK_API;
+      response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
+    }
+
     if (!response.ok) throw await responseError(response);
     return {
       blob: await response.blob(),
