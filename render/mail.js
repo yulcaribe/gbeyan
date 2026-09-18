@@ -6,7 +6,7 @@
  */
 import { normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage } from './ldm-parser.js';
 import { parseTripInfoMessage } from './tripinfo-parser.js';
-import { attachmentCacheKey, matchesFlightAndTail, parseGendecAttachment } from './gendec.js';
+import { attachmentCacheKey, matchesFlightNumber, parseGendecAttachment } from './gendec.js';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -399,7 +399,6 @@ function flightNumberVariants(flightNo) {
 
 function findFlightAttachments(messages, flightNo) {
   const flightKeys = flightNumberVariants(flightNo);
-  const flightPatterns = flightKeys.map(key => new RegExp(`${key}(?!\\d)`));
   const candidates = [];
 
   for (const message of messages) {
@@ -409,22 +408,24 @@ function findFlightAttachments(messages, flightNo) {
     for (const attachment of message.attachments || []) {
       const extension = crewAttachmentExtension(attachment.name);
       if (!extension) continue;
-      const nameKey = searchKey(attachment.name);
-      const flightMatch = flightPatterns.some(pattern => pattern.test(nameKey) || pattern.test(subjectKey) || pattern.test(bodyKey));
-      if (!flightMatch) continue;
 
+      const nameKey = searchKey(attachment.name);
       let score = 0;
+
+      // Filename/subject/body are only hints for ordering. They are NOT matching rules.
+      // The actual match is verified after parsing the attachment by flight number only.
       if (flightKeys.some(key => nameKey.includes(key))) score += 50;
       if (flightKeys.some(key => subjectKey.includes(key))) score += 30;
       if (flightKeys.some(key => bodyKey.includes(key))) score += 15;
       if (nameKey.includes('GENDEC')) score += 10;
       if (nameKey.includes('HGBS')) score += 10;
       if (extension === '.xlsx') score += 3;
+
       candidates.push({ message, attachment, score });
     }
   }
 
-  candidates.sort((a, b) => String(b.message.date).localeCompare(String(a.message.date)) || b.score - a.score);
+  candidates.sort((a, b) => b.score - a.score || String(b.message.date).localeCompare(String(a.message.date)));
   return candidates;
 }
 const cors = {
@@ -685,8 +686,7 @@ export default {
       }
       if (route === '/api/flight-crew') {
         const flightNo = normalizeFlightNumber(url.searchParams.get('flightNumber'));
-        const tailNumber = normalizeTail(url.searchParams.get('tailNumber'));
-        if (!flightNo || !tailNumber) return json({ error: 'Uçuş numarası ve kuyruk numarası gerekli.' }, 400);
+        if (!flightNo) return json({ error: 'Uçuş numarası gerekli.' }, 400);
         const hours = lookbackHours(url);
         const cacheOnly = url.searchParams.get('cache') === '1';
         const stored = cacheOnly && services.mailCache?.getMailSnapshot
@@ -706,23 +706,32 @@ export default {
             folder: snapshot.settings?.gendec || ''
           }, 404);
         }
+        const parseErrors = [];
         for (const match of candidates) {
-          const key = attachmentCacheKey(match.message, match.attachment);
-          let parsed = await services.mailCache?.getParsedGendec?.(key);
-          if (!parsed) {
-            const bytes = await fetchAttachment(alias, password, match.attachment.id);
-            parsed = await parseGendecAttachment(bytes, match.attachment, { flightNo, tailNumber });
-            if (parsed.crews?.length) await services.mailCache?.saveParsedGendec?.(key, parsed);
+          try {
+            const key = attachmentCacheKey(match.message, match.attachment);
+            let parsed = await services.mailCache?.getParsedGendec?.(key);
+            if (!parsed) {
+              const bytes = await fetchAttachment(alias, password, match.attachment.id);
+              parsed = await parseGendecAttachment(bytes, match.attachment, { flightNo });
+              if (parsed.crews?.length) await services.mailCache?.saveParsedGendec?.(key, parsed);
+            }
+            if (!parsed.crews?.length || !matchesFlightNumber(parsed, flightNo)) continue;
+            return json({
+              ok: true, status: 'ready', flightNumber: flightNo, crews: parsed.crews,
+              source: { receivedAt: match.message.date, subject: match.message.subject, attachmentName: match.attachment.name }
+            });
+          } catch (error) {
+            parseErrors.push({
+              attachmentName: match.attachment.name,
+              error: error instanceof Error ? error.message : String(error)
+            });
           }
-          if (!parsed.crews?.length || !matchesFlightAndTail(parsed, flightNo, tailNumber)) continue;
-          return json({
-            ok: true, status: 'ready', flightNumber: flightNo, tailNumber, crews: parsed.crews,
-            source: { receivedAt: match.message.date, subject: match.message.subject, attachmentName: match.attachment.name }
-          });
         }
         return json({
-          ok: true, status: 'not_found', flightNumber: flightNo, tailNumber, crews: [],
-          error: 'Sefer numarası bulunan GenDec eklerinde istenen kuyruk numarası doğrulanamadı.'
+          ok: true, status: 'not_found', flightNumber: flightNo, crews: [],
+          error: 'GenDec eklerinde istenen sefer numarası doğrulanamadı.',
+          parseErrors: parseErrors.slice(0, 5)
         }, 404);
       }
       if (route === '/api/flight-data') {
