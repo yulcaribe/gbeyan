@@ -399,6 +399,7 @@ function flightNumberVariants(flightNo) {
 
 function findFlightAttachments(messages, flightNo) {
   const flightKeys = flightNumberVariants(flightNo);
+  const flightPatterns = flightKeys.map(key => new RegExp(`${key}(?!\\d)`));
   const candidates = [];
 
   for (const message of messages) {
@@ -410,10 +411,12 @@ function findFlightAttachments(messages, flightNo) {
       if (!extension) continue;
 
       const nameKey = searchKey(attachment.name);
-      let score = 0;
+      const flightMatch = flightPatterns.some(pattern =>
+        pattern.test(nameKey) || pattern.test(subjectKey) || pattern.test(bodyKey)
+      );
+      if (!flightMatch) continue;
 
-      // Filename/subject/body are only hints for ordering. They are NOT matching rules.
-      // The actual match is verified after parsing the attachment by flight number only.
+      let score = 0;
       if (flightKeys.some(key => nameKey.includes(key))) score += 50;
       if (flightKeys.some(key => subjectKey.includes(key))) score += 30;
       if (flightKeys.some(key => bodyKey.includes(key))) score += 15;
@@ -425,7 +428,9 @@ function findFlightAttachments(messages, flightNo) {
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score || String(b.message.date).localeCompare(String(a.message.date)));
+  candidates.sort((a, b) =>
+    b.score - a.score || String(b.message.date).localeCompare(String(a.message.date))
+  );
   return candidates;
 }
 const cors = {
