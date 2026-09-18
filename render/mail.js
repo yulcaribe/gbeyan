@@ -428,7 +428,7 @@ function findFlightAttachments(messages, flightNo) {
   }
 
   candidates.sort((a, b) =>
-    b.score - a.score || String(b.message.date).localeCompare(String(a.message.date))
+    String(b.message.date).localeCompare(String(a.message.date)) || b.score - a.score
   );
   return candidates;
 }
