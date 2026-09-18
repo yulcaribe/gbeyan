@@ -1,7 +1,7 @@
 # gbeyan statik sitesini Render'da yayınlama
 
 Bu kurulum arayüzü ve tarayıcı modüllerini yayınlar. Mail API'si
-`otobeyan/config.js` dosyasındaki `https://gbeyan-api.onrender.com` adresini kullanır.
+`otobeyan/api.js` dosyasındaki `https://gbeyan-api.onrender.com` adresini kullanır.
 
 ## Panelden kurulum
 
@@ -14,7 +14,7 @@ Bu kurulum arayüzü ve tarayıcı modüllerini yayınlar. Mail API'si
 | Name | `gbeyan` |
 | Branch | `main` |
 | Root Directory | Boş bırak |
-| Build Command | `node scripts/build-static.mjs` |
+| Build Command | `node scripts/build-static.js` |
 | Publish Directory | `dist` |
 
 4. Environment bölümünde `SKIP_INSTALL_DEPS=true` ekle.
@@ -27,7 +27,8 @@ Bu kurulum arayüzü ve tarayıcı modüllerini yayınlar. Mail API'si
 ## Güncellemeler
 
 GitHub bağlantısı ve Auto-Deploy açık olduğunda `main` dalına gönderilen
-güncellemeler otomatik yayınlanır. JavaScript ve CSS `https://gbeyan.onrender.com` adresinden yüklenir.
+güncellemeler otomatik yayınlanır. Uygulama dosyaları aynı statik siteden yüklenir;
+PDF.js ve XLSX sabit sürümlü jsDelivr adreslerinden alınır.
 Statik site uykuya geçmez; 15 dakikalık uyku kuralı ücretsiz Web Service içindir.
 
 Yayın klasörü yalnızca build scriptindeki dosya listesinden oluşturulur.
@@ -38,7 +39,7 @@ bunlar sonraki aşamada kurulacak sunucunun ortam değişkenlerinde tutulmalıd�
 ## Yerel kontrol
 
 ```sh
-node scripts/build-static.mjs
+node scripts/build-static.js
 python -m http.server 8080 --directory dist
 ```
 
@@ -48,9 +49,9 @@ ayrıca kendi API'lerinin erişim/CORS kurallarına bağlıdır.
 
 ## index.html dosyasını local kullanma
 
-Güncel `index.html` dosyasını indirip bilgisayarda açabilirsin. CSS, JavaScript,
-parser ve PDF.js dosyaları `https://gbeyan.onrender.com` üzerinden yüklenir.
-Dosya yolları tam URL olduğu için yanına başka dosya kopyalamak gerekmez.
+Güncel `index.html` dosyasını tek başına indirerek doğrudan açabilirsin; küçük uygulama
+dosyaları statik Render sitesinden, PDF.js ve XLSX jsDelivr'dan yüklenir.
+Local GenDec dosyaları tarayıcıda ayrıştırılır ve API'ye yüklenmez.
 
 Render'da **Settings > Headers** bölümüne şu kuralı ekle:
 

@@ -4,7 +4,8 @@
  * PU - SURNAME,NAME gibi virgüllü rol satırlarını okur.
  */
 'use strict';
-function parseRyanCrewLines(rawLines) {
+function parseRyanCrewLines(rawLines, helpers = globalThis.GendecParser) {
+  const { buildCrewFromNameParts, foldTurkishChars } = helpers || {};
   const rolePattern = 'CP|FO|JU|PU|CA|CM|SCCM|CCM\\d*|CCM|ACM\\d*|ACM';
   const rx = new RegExp(`\\b(${rolePattern})\\s*-\\s*([^,]+),\\s*(.+)$`, 'i');
   const crews = [];
@@ -24,6 +25,9 @@ function parseRyanCrewLines(rawLines) {
 
   return crews;
 }
+
+globalThis.GendecAirlineParsers ||= {};
+globalThis.GendecAirlineParsers.rys = parseRyanCrewLines;
 
 function cleanGendecLineKeepComma(line) {
   return String(line || '')

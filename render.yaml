@@ -1,9 +1,31 @@
 services:
   - type: web
+    name: gbeyan-api
+    runtime: node
+    branch: main
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TEST_API_KEY
+        sync: false
+      - key: EWS_USERNAME
+        sync: false
+      - key: EWS_PASSWORD
+        sync: false
+      - key: GENDEC
+        sync: false
+      - key: LDM
+        sync: false
+      - key: TRIPINFO
+        sync: false
+  - type: web
     name: gbeyan
     runtime: static
     branch: main
-    buildCommand: node scripts/build-static.mjs
+    buildCommand: node scripts/build-static.js
     staticPublishPath: ./dist
     envVars:
       - key: SKIP_INSTALL_DEPS

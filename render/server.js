@@ -3,15 +3,14 @@ import { timingSafeEqual } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
-import mailService from './mail.mjs';
-import PRIVATE_PAGE from './private-page.mjs';
-import { MailStore } from './mail-store.mjs';
+import mailService from './mail.js';
+import PRIVATE_PAGE from './private-page.js';
+import { MailStore } from './mail-store.js';
 
-const VERSION = '1.7.4-mail-render';
+const VERSION = '1.8.0-mail-render';
 const HEADERS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',

@@ -9,3 +9,6 @@
 function parseSxsCrewLines(rawLines) {
   return [];
 }
+
+globalThis.GendecAirlineParsers ||= {};
+globalThis.GendecAirlineParsers.sxs = parseSxsCrewLines;

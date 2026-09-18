@@ -12,19 +12,14 @@ const files = [
   'cargo/cargo-core.js',
   'datas/countries.js',
   'gendec/fhy.js',
-  'gendec/gendec-core.js',
+  'gendec/parser.js',
+  'gendec/browser.js',
+  'gendec/ui.js',
   'gendec/noz.js',
   'gendec/rys.js',
   'gendec/sxs.js',
-  'otobeyan/config.js',
-  'otobeyan/loader.js',
+  'otobeyan/api.js',
   'otobeyan/quickbeyan.js',
-  'otobeyan/client/api.js',
-  'vendor/pdfjs/3.11.174/pdf.min.js',
-  'vendor/pdfjs/3.11.174/pdf.worker.min.js',
-  'vendor/pdfjs/3.11.174/LICENSE',
-  'vendor/xlsx/0.18.5/xlsx.full.min.js',
-  'vendor/xlsx/0.18.5/LICENSE'
 ];
 
 await rm(output, { recursive: true, force: true });

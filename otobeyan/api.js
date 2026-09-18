@@ -1,13 +1,13 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.7.4';
+  const CLIENT_VERSION = '1.8.0';
+  const API_URL = 'https://gbeyan-api.onrender.com';
   let accessCode = '';
 
   function config() {
-    const value = global.OTOBEYAN_CONFIG || {};
     return {
-      apiUrl: String(value.apiUrl || '').replace(/\/+$/, ''),
+      apiUrl: API_URL,
       mailLookbackHours: 15
     };
   }
@@ -80,23 +80,13 @@
     return jsonRequest('/api/mail/messages?hours=15');
   }
 
-  async function flightAttachment(flightNumber, options = {}) {
-    const normalized = String(flightNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(normalized)) {
-      throw new Error('Sefer numarası XQ254 biçiminde olmalı.');
-    }
-    const params = new URLSearchParams({ flightNo: normalized, hours: '15' });
-    if (options.cacheOnly) params.set('cache', '1');
-    const response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), {
-      cache: 'no-store',
-      headers: headers()
+  async function flightCrew(input = {}) {
+    const params = new URLSearchParams({
+      flightNumber: String(input.flightNumber || ''),
+      tailNumber: String(input.tailNumber || '')
     });
-    if (!response.ok) throw await responseError(response);
-    return {
-      blob: await response.blob(),
-      fileName: decodeURIComponent(response.headers.get('X-Attachment-Name') || `${normalized}.pdf`),
-      mailSubject: decodeURIComponent(response.headers.get('X-Mail-Subject') || '')
-    };
+    if (input.cacheOnly) params.set('cache', '1');
+    return jsonRequest(`/api/mail/flight-crew?${params}`);
   }
 
   async function flightData(input) {
@@ -117,9 +107,34 @@
     health,
     syncMail,
     recentMail,
-    flightAttachment,
-    cachedFlightAttachment: flightNumber => flightAttachment(flightNumber, { cacheOnly: true }),
-    flightPdf: flightAttachment,
+    flightCrew,
     flightData
   });
+
+  function installGate() {
+    if (document.getElementById('privateFeatureGate')) return;
+    const excelButton = document.getElementById('excelBtn');
+    if (!excelButton?.parentElement) return;
+    const gate = document.createElement('div');
+    gate.id = 'privateFeatureGate';
+    gate.innerHTML = '<input id="privateFeatureKey" type="password" placeholder="API anahtarı" autocomplete="off" aria-label="API anahtarı"><button id="privateFeatureUnlock" type="button">Etkinleştir</button><span id="privateFeatureGateStatus" role="status"></span>';
+    excelButton.parentElement.insertBefore(gate, excelButton);
+    const input = gate.querySelector('input');
+    const button = gate.querySelector('button');
+    const status = gate.querySelector('span');
+    const unlock = async () => {
+      button.disabled = true; status.textContent = 'Kontrol ediliyor…';
+      try {
+        await verifyAccess(input.value);
+        gate.dataset.state = 'ready'; input.hidden = true; button.textContent = `✓ Etkin · ${CLIENT_VERSION}`;
+        status.textContent = ''; global.OtoBeyanUi?.refresh?.();
+      } catch (error) {
+        button.disabled = false; status.textContent = error.message || 'Erişim reddedildi.';
+      }
+    };
+    button.addEventListener('click', unlock);
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') unlock(); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installGate, { once: true });
+  else installGate();
 })(globalThis);

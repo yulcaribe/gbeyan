@@ -4,7 +4,8 @@
  * Sıkışık tablo formatını ekip satırlarına ayırır.
  */
 'use strict';
-function parseNorwegianCompactCrewLines(rawLines) {
+function parseNorwegianCompactCrewLines(rawLines, helpers = globalThis.GendecParser) {
+  const { buildCrewFromNameParts, foldTurkishChars } = helpers || {};
   const tableText = getNorwegianCompactCrewTableText(rawLines);
   if (!tableText) return [];
 
@@ -37,6 +38,9 @@ function parseNorwegianCompactCrewLines(rawLines) {
 
   return crews;
 }
+
+globalThis.GendecAirlineParsers ||= {};
+globalThis.GendecAirlineParsers.noz = parseNorwegianCompactCrewLines;
 
 function getNorwegianCompactCrewTableText(rawLines) {
   let inCrewTable = false;

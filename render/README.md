@@ -26,21 +26,19 @@ Environment bölümünde aşağıdakileri gir. Gerçek değerleri GitHub'a veya 
 | `TEST_API_KEY` | Personelin kullanacağı API anahtarı |
 | `EWS_USERNAME` | Mevcut TGS kullanıcı adı |
 | `EWS_PASSWORD` | Mevcut TGS şifresi |
-| `GENDEC_FOLDER_PATH` | Mevcut GenDec klasör yolu |
-| `LDM_FOLDER_PATH` | Mevcut LDM klasör yolu |
-| `TRIP_INFO_FOLDER_PATH` | Mevcut Trip Info klasör yolu |
+| `GENDEC` | Mevcut GenDec klasör yolu |
+| `LDM` | Mevcut LDM klasör yolu |
+| `TRIPINFO` | Mevcut Trip Info klasör yolu |
 
 Klasör değişkenleri boş bırakılırsa üçü de `SXS\GenDec` kullanır.
+Eski `GENDEC_FOLDER_PATH`, `LDM_FOLDER_PATH`, `TRIP_INFO_FOLDER_PATH` adları da geriye dönük desteklenir.
 Klasör adında `/` varsa seviyeleri `>` ile ayırabilirsin.
 Statik siteye verdiğin `SKIP_INSTALL_DEPS` bu servis için gerekli değildir.
 
 ## Uygulamaya bağlama
 
 Yayın bittikten sonra Render'ın verdiği gerçek API adresini al.
-`otobeyan/config.js` içindeki `apiUrl` bu adresle değiştirilmeli,
-ardından `otobeyan/loader.js` içindeki config hash'i ve `index.html` içindeki
-loader hash'i yeniden hesaplanmalıdır. Bu adım tamamlanana kadar istemci
-mevcut API adresini kullanmaya devam eder.
+API adresi değişirse `otobeyan/api.js` içindeki `API_URL` güncellenmelidir.
 
 Mevcut API adresi `https://gbeyan-api.onrender.com` olarak ayarlanmıştır.
 
@@ -56,8 +54,9 @@ ortak kullanılır. Eşzamanlı taramalar aynı promise'i bekler; her personel i
 ayrı Exchange taraması başlatılmaz. Sunucu uyurken mail kontrolü yapılmaz.
 Yeni istek geldiğinde gerekiyorsa son 15 saat yeniden taranır. GenDec, LDM ve
 Trip Info klasörlerinde 15 saatten eski mesajlar kalıcı silinir. Çöp Kutusu
-saatte en fazla bir kez taranır ve 15 saatten eski tüm mesajlar, türüne
-bakılmadan kalıcı olarak temizlenir.
+her mail yenilemesinde taranır ve 15 saatten eski tüm mesajlar, türüne
+bakılmadan gerçek Exchange permanent-delete ile temizlenir. Başarı ancak
+silme yanıtı ve yeniden senkronizasyon doğrulamasından sonra bildirilir.
 
 Snapshot ve panelden değiştirilen klasör ayarları bellektedir; sunucu yeniden
 başladığında kaybolur. Kalmasını istediğin klasör yollarını Render Environment
@@ -65,15 +64,11 @@ alanına gir. Önceki sunucunun önbelleği taşınmaz; yeniden oluşturulur.
 
 API, local HTML'nin `null` origin'ine, `https://gbeyan.onrender.com` origin'ine
 ve Render'ın `RENDER_EXTERNAL_URL` ile verdiği kendi adresine izin verir.
-Dosya adı başlıkları local istemci tarafından okunabilir. API anahtarı kontrolü
+API anahtarı kontrolü
 ve hatalı anahtar denemeleri için bellek içinde hız sınırı uygulanır.
 
 ## Doğrulama
 
-```sh
-npm test
-```
-
-Testler sahte Exchange WBXML yanıtları kullanır; gerçek kimlik bilgisi veya
-canlı Exchange bağlantısı gerekmez. Gerçek Exchange bağlantısı Render'da
-Environment değerleri girildikten sonra ayrıca doğrulanmalıdır.
+`npm run build:static` ile statik paket ve `npm start` ile API başlangıcı
+kontrol edilir. Canlı Exchange silme/doğrulama akışı yalnızca Render'da gerçek
+Environment değerleri girildikten sonra manuel olarak doğrulanabilir.

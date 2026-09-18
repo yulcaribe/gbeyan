@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.7.4';
+const QUICKBEYAN_VERSION = '1.8.0';
 
 const state = {
   busy: false,
@@ -64,25 +64,7 @@ function getMainState() {
 }
 
 function installStyles() {
-  if (document.getElementById('otobeyanStyles')) return;
-  const style = document.createElement('style');
-  style.id = 'otobeyanStyles';
-  style.textContent = `
-    #otobeyanOverlay{position:fixed;inset:0;z-index:2300;display:none;place-items:center;padding:8px;background:#0f172a99;backdrop-filter:blur(2px)}
-    #otobeyanOverlay.open{display:grid}
-    #otobeyanPanel{width:min(1280px,calc(100vw - 16px));height:min(920px,calc(100dvh - 16px));display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:#fff;border:1px solid #cbd5e1;border-radius:16px;box-shadow:0 22px 70px #0f172a66;overflow:hidden}
-    .otobeyan-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#172554;color:#fff}.otobeyan-title{font-size:17px;font-weight:800}.otobeyan-sub{font-size:10px;color:#c7d2fe;margin-top:1px}.otobeyan-actions{display:flex;gap:6px}.otobeyan-head button{border:1px solid #ffffff40;background:#ffffff16;color:#fff;border-radius:7px;padding:5px 8px;cursor:pointer}
-    #otobeyanMessages{min-height:0;padding:7px;overflow:auto;overscroll-behavior:contain;background:#f8fafc;display:flex;flex-direction:column;gap:4px}.otobeyan-message{box-sizing:border-box;flex:0 0 auto;width:100%;padding:6px 8px;border-radius:8px;font-size:11px;line-height:1.25;white-space:pre-wrap;background:#fff;border:1px solid #e2e8f0;color:#334155}.otobeyan-message.error{border-color:#fecaca;background:#fef2f2;color:#991b1b}.otobeyan-message.success{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.otobeyan-message strong{font-weight:800}
-    .otobeyan-quick-btn{margin-top:5px;border:1px solid #2563eb;border-radius:7px;background:#eff6ff;color:#1d4ed8;padding:6px 9px;font:800 11px/1.1 inherit;cursor:pointer;white-space:nowrap}.otobeyan-quick-btn:hover{background:#dbeafe}.otobeyan-quick-btn:disabled{opacity:.55;cursor:wait}.otobeyan-card{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin-top:4px}.otobeyan-card>div{display:grid;gap:1px;padding:4px 7px;border:1px solid #dbe3ee;border-radius:6px;background:#fff}.otobeyan-card span:first-child{color:#64748b;font-size:8px;text-transform:uppercase}.otobeyan-pill{display:inline-block;margin-top:4px;padding:2px 6px;border-radius:999px;background:#dcfce7;color:#166534;font-size:9px;font-weight:800}
-    .otobeyan-wide{max-width:100%}.otobeyan-crew-list{display:flex;flex-direction:column;gap:2px;margin-top:4px;overflow-x:auto}.otobeyan-crew-row,.otobeyan-crew-columns{display:grid;grid-template-columns:26px minmax(118px,1.1fr) minmax(100px,1.1fr) minmax(110px,1.1fr) 58px 112px 70px minmax(125px,1.25fr) 28px;gap:4px;align-items:center;min-width:0}.otobeyan-crew-columns{padding:0 4px;color:#64748b;font-size:8px;font-weight:800;text-transform:uppercase}.otobeyan-crew-row{border:1px solid #dbe3ee;border-radius:6px;padding:3px;background:#f8fafc}.otobeyan-crew-no{text-align:center;font-weight:800;color:#475569}.otobeyan-crew-field{min-width:0}.otobeyan-crew-field span{display:none}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{min-width:0;width:100%;height:27px;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:5px;background:#fff;padding:3px 5px;font:11px inherit;color:#0f172a}.otobeyan-remove-crew{border:0;background:#fee2e2;color:#991b1b;border-radius:5px;width:26px;height:25px;padding:0;cursor:pointer}.otobeyan-source-arrow{font-size:9px;color:#64748b;margin-top:3px}.otobeyan-inline-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.otobeyan-btn{border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;padding:6px 9px;font:700 11px/1.2 inherit;cursor:pointer}.otobeyan-btn.primary{background:#2563eb;border-color:#2563eb;color:#fff}.otobeyan-btn.success{background:#15803d;border-color:#15803d;color:#fff}.otobeyan-btn:disabled{opacity:.55;cursor:not-allowed}.otobeyan-review{display:grid;grid-template-columns:repeat(4,minmax(115px,1fr)) auto;gap:6px;margin-top:4px;align-items:end}.otobeyan-review label{display:flex;flex-direction:column;gap:2px;font-size:8px;text-transform:uppercase;color:#64748b;font-weight:800}.otobeyan-review .otobeyan-inline-actions{margin:0;flex-wrap:nowrap}
-    #otobeyanLiveSummary{padding:7px 12px;border-top:1px solid #cbd5e1;background:#eef2ff;color:#172554}.otobeyan-summary-main{font-size:12px;font-weight:900;letter-spacing:.01em}.otobeyan-summary-extra{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}.otobeyan-summary-chip{padding:2px 6px;border:1px solid #c7d2fe;border-radius:999px;background:#fff;font-size:9px;font-weight:800;color:#3730a3}
-    #otobeyanJobStack{position:fixed;right:18px;bottom:18px;z-index:2600;width:min(370px,calc(100vw - 24px));display:flex;flex-direction:column-reverse;gap:10px;pointer-events:none}.otobeyan-job{pointer-events:auto;overflow:hidden;border:1px solid #ffffff90;border-radius:16px;background:#fffffff2;color:#0f172a;box-shadow:0 18px 50px #0f172a35;backdrop-filter:blur(18px) saturate(1.25);animation:otobeyanJobIn .28s cubic-bezier(.2,.8,.2,1)}.otobeyan-job-head{display:flex;align-items:center;gap:10px;padding:11px 12px 7px}.otobeyan-job-icon{display:grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:#dbeafe;color:#1d4ed8;font-size:17px}.otobeyan-job-title{min-width:0;flex:1}.otobeyan-job-title strong{display:block;font-size:13px}.otobeyan-job-title span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;color:#64748b;font-size:10px}.otobeyan-job-close{display:none;border:0;background:transparent;color:#64748b;font:18px/1 inherit;cursor:pointer}.otobeyan-job-status{padding:0 12px 9px;font-size:11px;font-weight:700}.otobeyan-job-track{height:3px;background:#e2e8f0}.otobeyan-job-bar{height:100%;width:8%;background:linear-gradient(90deg,#2563eb,#60a5fa);transition:width .3s ease}.otobeyan-job-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:8px 10px 10px}.otobeyan-job-step{text-align:center;color:#94a3b8;font-size:8px;font-weight:800}.otobeyan-job-step::before{content:'';display:block;width:7px;height:7px;margin:0 auto 3px;border-radius:50%;background:#cbd5e1}.otobeyan-job-step.done,.otobeyan-job-step.current{color:#1d4ed8}.otobeyan-job-step.done::before{background:#22c55e}.otobeyan-job-step.current::before{background:#2563eb;box-shadow:0 0 0 4px #dbeafe}.otobeyan-job.success .otobeyan-job-icon{background:#dcfce7;color:#15803d}.otobeyan-job.success .otobeyan-job-bar{background:#22c55e}.otobeyan-job.success .otobeyan-job-status{color:#166534}.otobeyan-job.error .otobeyan-job-icon{background:#fee2e2;color:#b91c1c}.otobeyan-job.error .otobeyan-job-bar{background:#ef4444}.otobeyan-job.error .otobeyan-job-status{color:#991b1b}.otobeyan-job.success .otobeyan-job-close,.otobeyan-job.error .otobeyan-job-close{display:block}@keyframes otobeyanJobIn{from{opacity:0;transform:translateX(28px) scale(.97)}to{opacity:1;transform:none}}
-    .otobeyan-drop{display:flex;align-items:center;justify-content:space-between;gap:10px;border:2px dashed #93c5fd;background:#eff6ff;color:#1e3a8a}.otobeyan-drop.dragover{border-color:#2563eb;background:#dbeafe}.otobeyan-drop-copy strong{display:block}.otobeyan-drop-copy span{display:block;margin-top:2px;color:#64748b;font-size:9px}.otobeyan-file-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-    @media(max-width:1000px){.otobeyan-crew-row,.otobeyan-crew-columns{grid-template-columns:26px 118px 100px 110px 58px 112px 70px 125px 28px;min-width:780px}.otobeyan-review{grid-template-columns:repeat(2,minmax(130px,1fr))}.otobeyan-review .otobeyan-inline-actions{grid-column:1/-1}}
-    @media(max-width:720px){#otobeyanOverlay{padding:0}#otobeyanPanel{width:100%;height:100dvh;border-radius:0}.otobeyan-head{padding:8px 10px}.otobeyan-card{grid-template-columns:repeat(2,minmax(0,1fr))}#otobeyanLiveSummary{padding:6px 8px}#otobeyanJobStack{right:12px;bottom:12px}}
-    @media(max-height:760px) and (min-width:721px){#otobeyanPanel{height:calc(100dvh - 8px)}.otobeyan-head{padding:7px 12px}#otobeyanMessages{padding:5px}.otobeyan-message{padding:4px 6px}.otobeyan-crew-field input,.otobeyan-crew-field select,.otobeyan-review input,.otobeyan-review select{height:25px}.otobeyan-crew-row{padding:2px}#otobeyanLiveSummary{padding:5px 10px}}
-  `;
-  document.head.appendChild(style);
+  // QuickBeyan styles live in style.css.
 }
 
 function installUi() {
@@ -328,31 +310,19 @@ async function checkMailConnectivity() {
 
 async function searchCrewMail(context) {
   const sourceToken = state.crewSourceToken;
-  const fetchCrewAttachment = globalThis.OtoBeyanApi?.flightAttachment || globalThis.OtoBeyanApi?.flightPdf;
-  const parsePdf = getMainFunction('parseCrewPdfFileData');
-  const parseExcel = getMainFunction('readCrewExcelFile');
-  if (fetchCrewAttachment && (parsePdf || parseExcel)) {
+  const fetchCrew = globalThis.OtoBeyanApi?.flightCrew;
+  if (fetchCrew) {
     try {
-      const attachment = await fetchCrewAttachment(context.flightNumber);
-      const fileName = attachment.fileName || `${context.flightNumber}.pdf`;
-      const file = new File([attachment.blob], fileName, {
-        type: attachment.blob.type || 'application/octet-stream',
-        lastModified: Date.now()
+      const result = await fetchCrew({
+        flightNumber: context.flightNumber,
+        tailNumber: context.tailNumber
       });
-      const isExcel = /\.(xlsx|xls)$/i.test(fileName);
-      const crews = isExcel
-        ? await parseExcel?.(file)
-        : (await parsePdf?.(file, {
-            flightNo: context.flightNumber,
-            tailNumber: context.tailNumber || '',
-            departurePortCode: context.departurePortCode || '',
-            arrivalPortCode: context.arrivalPortCode || ''
-          }))?.crews;
+      const crews = result?.crews;
       if (!Array.isArray(crews) || !crews.length) {
-        throw new Error(`GenDec ${isExcel ? 'Excel' : 'PDF'} bulundu fakat ekip listesi ayrıştırılamadı.`);
+        throw new Error('Uçuş ve kuyruk numarası doğrulanmış ekip listesi bulunamadı.');
       }
       if (sourceToken !== state.crewSourceToken) return null;
-      renderCrewEditor(crews, `Mail GenDec · ${fileName}`);
+      renderCrewEditor(crews, `Mail GenDec · ${result.source?.attachmentName || context.flightNumber}`);
       return crews;
     } catch (error) {
       if (sourceToken !== state.crewSourceToken) return null;
@@ -409,19 +379,14 @@ async function processQuickCrewFile(file) {
     return;
   }
 
-  const parsePdf = getMainFunction('parseCrewPdfFileData');
-  const parseExcel = getMainFunction('readCrewExcelFile');
   const context = state.lastContext;
   setSearchStatus(`${fileName} okunuyor…`);
   try {
-    const crews = isExcel
-      ? await parseExcel?.(file)
-      : (await parsePdf?.(file, {
-          flightNo: context?.flightNumber || '',
-          tailNumber: context?.tailNumber || '',
-          departurePortCode: context?.departurePortCode || '',
-          arrivalPortCode: context?.arrivalPortCode || ''
-        }))?.crews;
+    const result = await globalThis.GendecBrowser.parseFile(file, {
+      flightNo: context?.flightNumber || '', tailNumber: context?.tailNumber || '',
+      departurePortCode: context?.departurePortCode || '', arrivalPortCode: context?.arrivalPortCode || ''
+    });
+    const crews = result.crews;
     if (!Array.isArray(crews) || !crews.length) throw new Error('Dosyada ekip listesi bulunamadı.');
     renderCrewEditor(crews, `Yüklenen GenDec · ${fileName}`);
     setSearchStatus(`${crews.length} ekip dosyadan okundu.`, 'success');

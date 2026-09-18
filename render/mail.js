@@ -4,7 +4,9 @@
  * Production credentials come from server environment variables.
  * Credentials stay on the server.
  */
-import { buildFlightRecords, normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage, parseTripInfoMessage } from './mail-parsers.mjs';
+import { normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage } from './ldm-parser.js';
+import { parseTripInfoMessage } from './tripinfo-parser.js';
+import { attachmentCacheKey, matchesFlightAndTail, parseGendecAttachment } from './gendec.js';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -19,7 +21,6 @@ const WINDOW_SIZE = 100;
 const MAX_SYNC_PAGES = 5;
 const DEFAULT_LOOKBACK_HOURS = 15;
 const MAIL_CACHE_TTL_MS = 5 * 60 * 1000;
-const MAIL_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const CREW_ATTACHMENT_EXTENSIONS = Object.freeze(['.pdf', '.xlsx', '.xls']);
 const FLIGHT_CODE_ALIASES = Object.freeze({
   STW: '2S',
@@ -27,6 +28,36 @@ const FLIGHT_CODE_ALIASES = Object.freeze({
   TWI: 'TI',
   TI: 'TWI'
 });
+
+function newest(records) {
+  return [...records].sort((left, right) => String(right?.source?.receivedAt || '').localeCompare(String(left?.source?.receivedAt || '')))[0] || null;
+}
+function valueField(value, record, confidence, validation) {
+  return { value, source: record?.source || null, confidence, validation };
+}
+function buildFlightRecords(ldmRecords = [], tripInfoRecords = []) {
+  const keys = new Set([...ldmRecords, ...tripInfoRecords].map(record => record.key).filter(Boolean));
+  return [...keys].map(key => {
+    const trip = newest(tripInfoRecords.filter(record => record.key === key));
+    const ldm = newest(ldmRecords.filter(record => record.key === key));
+    const selected = trip || ldm;
+    const paxValid = ldm?.validations?.paxMatchesMessage === true;
+    const fuelValid = trip?.validations?.blockFuelPositive === true && trip?.validations?.blockFuelMatchesTakeOffPlusTaxi !== false;
+    return {
+      key, flightNumber: selected?.flightNumber || '', flightDate: trip?.flightDate || ldm?.flightDate || '',
+      originPortCode: trip?.originPortCode || '', destinationPortCode: trip?.destinationPortCode || ldm?.destinationPortCode || '',
+      tailNumber: selected?.tailNumber || '', cockpitCrew: trip?.cockpitCrew ?? ldm?.cockpitCrew ?? null,
+      cabinCrew: trip?.cabinCrew ?? ldm?.cabinCrew ?? null,
+      fields: {
+        pax: valueField(ldm?.pax ?? null, ldm, ldm ? (paxValid ? 1 : 0.55) : 0, ldm?.validations || { available: false }),
+        infant: valueField(ldm?.infant ?? null, ldm, ldm ? (paxValid ? 1 : 0.55) : 0, ldm?.validations || { available: false }),
+        blockFuelKg: valueField(trip?.blockFuelKg ?? null, trip, trip ? (fuelValid ? 1 : 0.55) : 0, trip?.validations || { available: false })
+      },
+      sources: { ldm: ldm?.source || null, tripInfo: trip?.source || null },
+      validations: { pax: paxValid, blockFuel: fuelValid, tailConsistent: ldm && trip ? ldm.tailNumber === trip.tailNumber : null }
+    };
+  }).sort((left, right) => `${right.flightDate}|${right.flightNumber}`.localeCompare(`${left.flightDate}|${left.flightNumber}`));
+}
 
 const TAGS = {
   0: { 5:'Sync',6:'Responses',7:'Add',8:'Change',9:'Delete',10:'Fetch',11:'SyncKey',12:'ClientId',13:'ServerId',14:'Status',15:'Collection',16:'Class',18:'CollectionId',19:'GetChanges',20:'MoreAvailable',21:'WindowSize',22:'Commands',23:'Options',24:'FilterType',28:'Collections',29:'ApplicationData',30:'DeletesAsMoves',34:'MIMESupport',35:'MIMETruncation',40:'MaxItems' },
@@ -271,11 +302,24 @@ async function permanentlyDeleteMessages(alias, password, loadedFolder, messageI
   for (let index = 0; index < uniqueIds.length; index += WINDOW_SIZE) {
     const batch = uniqueIds.slice(index, index + WINDOW_SIZE);
     const result = await eas(alias, password, 'Sync', deleteMessagesPayload(loadedFolder.folder.id, syncKey, batch));
-    const status = first(result.tree, 'Status');
-    if (status && status !== '1') throw new Error(`Exchange kalici silme hatasi: Status ${status}.`);
+    const collection = nodes(result.tree, 'Collection')[0] || result.tree;
+    const status = child(collection, 'Status')?.text || first(result.tree, 'Status');
+    if (status !== '1') throw new Error(`Exchange kalici silme hatasi: Status ${status || 'yok'}.`);
+    for (const response of nodes(child(collection, 'Responses') || collection, 'Delete')) {
+      const commandStatus = first(response, 'Status');
+      const serverId = first(response, 'ServerId');
+      if (commandStatus && commandStatus !== '1') {
+        throw new Error(`Exchange ${serverId || 'mail'} kalici silme komutunu reddetti: Status ${commandStatus}.`);
+      }
+    }
     const nextSyncKey = first(result.tree, 'SyncKey');
     if (!nextSyncKey) throw new Error('Exchange silme sonrasi SyncKey degerini vermedi.');
     syncKey = nextSyncKey;
+    const verification = await loadMessages(alias, password, loadedFolder.folder);
+    const remaining = new Set(verification.messages.map(message => message.id));
+    const failed = batch.filter(id => remaining.has(id));
+    if (failed.length) throw new Error(`Exchange kalici silme dogrulamasi basarisiz: ${failed.length} mail hâlâ klasörde.`);
+    loadedFolder.messages = loadedFolder.messages.filter(message => !batch.includes(message.id));
     deleted += batch.length;
   }
   loadedFolder.syncKey = syncKey;
@@ -353,7 +397,7 @@ function flightNumberVariants(flightNo) {
   return [...variants];
 }
 
-function findFlightAttachment(messages, flightNo) {
+function findFlightAttachments(messages, flightNo) {
   const flightKeys = flightNumberVariants(flightNo);
   const flightPatterns = flightKeys.map(key => new RegExp(`${key}(?!\\d)`));
   const candidates = [];
@@ -380,33 +424,13 @@ function findFlightAttachment(messages, flightNo) {
     }
   }
 
-  candidates.sort((a, b) => b.score - a.score || String(b.message.date).localeCompare(String(a.message.date)));
-  return candidates[0] || null;
-}
-function fileResponse(bytes, name, extraHeaders = {}) {
-  const safeName = String(name || 'attachment').replaceAll('"', '');
-  const lowerName = safeName.toLowerCase();
-  const contentType = lowerName.endsWith('.pdf')
-    ? 'application/pdf'
-    : lowerName.endsWith('.xlsx')
-      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      : lowerName.endsWith('.xls')
-        ? 'application/vnd.ms-excel'
-        : 'application/octet-stream';
-  return new Response(bytes, { headers: {
-    ...cors,
-    'Content-Type': contentType,
-    'Content-Length': String(bytes.length),
-    'Content-Disposition': `attachment; filename="${safeName}"`,
-    'X-Attachment-Name': encodeURIComponent(safeName),
-    ...extraHeaders
-  } });
+  candidates.sort((a, b) => String(b.message.date).localeCompare(String(a.message.date)) || b.score - a.score);
+  return candidates;
 }
 const cors = {
   'Access-Control-Allow-Origin': 'null',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer'
@@ -421,9 +445,9 @@ function folderPath(value, fallback) {
 
 function normalizeSettings(value = {}, env = {}) {
   return {
-    gendec: folderPath(value.gendec || env.GENDEC_FOLDER_PATH, DEFAULT_FOLDER_SETTINGS.gendec),
-    ldm: folderPath(value.ldm || env.LDM_FOLDER_PATH, DEFAULT_FOLDER_SETTINGS.ldm),
-    tripInfo: folderPath(value.tripInfo || env.TRIP_INFO_FOLDER_PATH, DEFAULT_FOLDER_SETTINGS.tripInfo)
+    gendec: folderPath(value.gendec || env.GENDEC_FOLDER_PATH || env.GENDEC, DEFAULT_FOLDER_SETTINGS.gendec),
+    ldm: folderPath(value.ldm || env.LDM_FOLDER_PATH || env.LDM, DEFAULT_FOLDER_SETTINGS.ldm),
+    tripInfo: folderPath(value.tripInfo || env.TRIP_INFO_FOLDER_PATH || env.TRIPINFO, DEFAULT_FOLDER_SETTINGS.tripInfo)
   };
 }
 
@@ -478,12 +502,6 @@ async function cleanOldMail(alias, password, results, previous, hours = DEFAULT_
     }
   }
 
-  const lastTrashCleanup = Date.parse(previous?.cleanup?.trashAt || '');
-  if (Number.isFinite(lastTrashCleanup) && now - lastTrashCleanup < MAIL_CLEANUP_INTERVAL_MS) {
-    cleanup.trashAt = previous.cleanup.trashAt;
-    cleanup.trashSkipped = true;
-    return cleanup;
-  }
   cleanup.trashAt = cleanup.at;
 
   const trashFolder = results.records.find(folder => String(folder.type) === '4');
@@ -560,8 +578,9 @@ function snapshotIsFresh(snapshot) {
 function flightDataFromSnapshot(snapshot, flightNumber, flightDate, tailNumber) {
   const tail = normalizeTail(tailNumber);
   if (!tail) return null;
-  const exact = snapshot.flights?.find(item => item.key === `${flightNumber}|${flightDate}`) || null;
-  const base = (exact?.sources?.tripInfo || normalizeTail(exact?.tailNumber) === tail) ? exact : null;
+  const base = [...(snapshot.flights || [])]
+    .filter(item => item.flightNumber === flightNumber && normalizeTail(item.tailNumber) === tail)
+    .sort((left, right) => String(right.sources?.tripInfo?.receivedAt || '').localeCompare(String(left.sources?.tripInfo?.receivedAt || '')))[0] || null;
   const ldm = [...(snapshot.parsed?.ldm || [])]
     .filter(item => item.flightNumber === flightNumber && normalizeTail(item.tailNumber) === tail)
     .sort((left, right) => String(right.source?.receivedAt || '').localeCompare(String(left.source?.receivedAt || '')))[0] || null;
@@ -574,7 +593,7 @@ function flightDataFromSnapshot(snapshot, flightNumber, flightDate, tailNumber) 
 
   return {
     ...(base || {
-      key: `${flightNumber}|${flightDate}`,
+      key: `${flightNumber}|${tail}`,
       flightNumber,
       flightDate,
       originPortCode: '',
@@ -664,8 +683,10 @@ export default {
         const snapshot = await getSnapshot(hours, url.searchParams.get('refresh') === '1');
         return json(snapshot);
       }
-      if (route === '/api/flight-attachment' || route === '/api/flight-pdf') {
-        const flightNo = url.searchParams.get('flightNo');
+      if (route === '/api/flight-crew') {
+        const flightNo = normalizeFlightNumber(url.searchParams.get('flightNumber'));
+        const tailNumber = normalizeTail(url.searchParams.get('tailNumber'));
+        if (!flightNo || !tailNumber) return json({ error: 'Uçuş numarası ve kuyruk numarası gerekli.' }, 400);
         const hours = lookbackHours(url);
         const cacheOnly = url.searchParams.get('cache') === '1';
         const stored = cacheOnly && services.mailCache?.getMailSnapshot
@@ -677,18 +698,32 @@ export default {
         const snapshot = cacheOnly
           ? { ...stored, gendecMessages: recentMessages(stored.gendecMessages || stored.messages, hours) }
           : await getSnapshot(hours);
-        const match = findFlightAttachment(snapshot.gendecMessages || snapshot.messages, flightNo);
-        if (!match) {
+        const candidates = findFlightAttachments(snapshot.gendecMessages || snapshot.messages, flightNo);
+        if (!candidates.length) {
           return json({
             error: `Son ${hours} saatte ${flightNo} ucusu icin PDF veya Excel ekip eki bulunamadi.`,
             searchedMessages: (snapshot.gendecMessages || snapshot.messages || []).length,
             folder: snapshot.settings?.gendec || ''
           }, 404);
         }
-        const bytes = await fetchAttachment(alias, password, match.attachment.id);
-        return fileResponse(bytes, match.attachment.name, {
-          'X-Mail-Subject': encodeURIComponent(String(match.message.subject || ''))
-        });
+        for (const match of candidates) {
+          const key = attachmentCacheKey(match.message, match.attachment);
+          let parsed = await services.mailCache?.getParsedGendec?.(key);
+          if (!parsed) {
+            const bytes = await fetchAttachment(alias, password, match.attachment.id);
+            parsed = await parseGendecAttachment(bytes, match.attachment, { flightNo, tailNumber });
+            if (parsed.crews?.length) await services.mailCache?.saveParsedGendec?.(key, parsed);
+          }
+          if (!parsed.crews?.length || !matchesFlightAndTail(parsed, flightNo, tailNumber)) continue;
+          return json({
+            ok: true, status: 'ready', flightNumber: flightNo, tailNumber, crews: parsed.crews,
+            source: { receivedAt: match.message.date, subject: match.message.subject, attachmentName: match.attachment.name }
+          });
+        }
+        return json({
+          ok: true, status: 'not_found', flightNumber: flightNo, tailNumber, crews: [],
+          error: 'Sefer numarası bulunan GenDec eklerinde istenen kuyruk numarası doğrulanamadı.'
+        }, 404);
       }
       if (route === '/api/flight-data') {
         const flightNumber = normalizeFlightNumber(url.searchParams.get('flightNumber'));
@@ -706,13 +741,6 @@ export default {
           folderStatus: snapshot.folderStatus
         });
       }
-      if (route === '/api/attachment') {
-        const attachmentId = url.searchParams.get('id');
-        const name = url.searchParams.get('name') || 'attachment';
-        if (!attachmentId) return json({ error: 'id eksik.' }, 400);
-        const fileBytes = await fetchAttachment(alias, password, attachmentId);
-        return fileResponse(fileBytes, name);
-      }
       if (route === '/api/sync' && request.method === 'POST') {
         const snapshot = await getSnapshot(DEFAULT_LOOKBACK_HOURS, true);
         return json({
@@ -723,6 +751,18 @@ export default {
           flightCount: snapshot.flights.length,
           lookbackHours: snapshot.lookbackHours
         });
+      }
+      if (route === '/api/trash/delete' && request.method === 'POST') {
+        const input = await request.json();
+        const messageId = String(input?.messageId || '').trim();
+        if (!messageId) return json({ error: 'messageId eksik.' }, 400);
+        const records = await folderRecords(alias, password);
+        const trashFolder = records.find(folder => String(folder.type) === '4');
+        if (!trashFolder) return json({ error: 'Çöp Kutusu bulunamadı.' }, 404);
+        const trash = await loadMessages(alias, password, trashFolder);
+        if (!trash.messages.some(message => message.id === messageId)) return json({ error: 'Mail çöp kutusunda bulunamadı.' }, 404);
+        const deleted = await permanentlyDeleteMessages(alias, password, trash, [messageId]);
+        return json({ ok: deleted === 1, permanentlyDeleted: deleted });
       }
       return json({ error: 'Not found' }, 404);
     } catch (error) { return json({ error: error instanceof Error ? error.message : String(error) }, 502); }
