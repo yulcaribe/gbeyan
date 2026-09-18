@@ -3304,6 +3304,30 @@ function hvbUpdateInt(key, raw) {
   _hvbState[key] = Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+function hvbUpdateFuel(key, raw, input) {
+  const value = String(raw ?? '').trim();
+  if (!value) {
+    _hvbState[key] = 0;
+    return;
+  }
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n) || n <= 0) {
+    _hvbState[key] = 0;
+    if (input) input.value = '';
+    return;
+  }
+  _hvbState[key] = n;
+}
+
+function hvbFuelInputValue(value) {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n > 0 ? String(n) : '';
+}
+
+function hvbHasPositiveFuel(source = _hvbState) {
+  return (Number(source?.fuelNational) || 0) > 0 || (Number(source?.fuelForeign) || 0) > 0;
+}
+
 function hvbParseDecimal(raw) {
   const normalized = String(raw ?? '').trim().replace(/\s+/g, '').replace(',', '.');
   if (!normalized) return 0;
@@ -3676,6 +3700,11 @@ async function submitHavayoluBeyanStatusAction() {
     return;
   }
 
+  if (!hvbHasPositiveFuel(_hvbState)) {
+    alert('Yakıt 0 olamaz. Beyanı göndermeden önce Milli veya Yabancı yakıt değerlerinden en az biri 1 KG veya daha büyük olmalı.');
+    return;
+  }
+
   const btn = document.querySelector('#havayoluBeyanOverlay .btn-primary');
   const origText = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Gönderiliyor...'; }
@@ -3789,6 +3818,15 @@ function buildHvbFormHtml(d) {
         style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;width:100%">
     </div>`;
 
+  const fuelField = (label, key) => `
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em">${label}</label>
+      <input type="number" min="1" step="1" value="${escapeHtml(hvbFuelInputValue(_hvbState[key]))}"
+        placeholder="En az 1"
+        oninput="hvbUpdateFuel('${key}',this.value,this)"
+        style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;width:100%">
+    </div>`;
+
   const decimalField = (label, key) => `
     <div style="display:flex;flex-direction:column;gap:4px">
       <label style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em">${label}</label>
@@ -3869,8 +3907,8 @@ function buildHvbFormHtml(d) {
 
     ${section('Yakıt', `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
-        ${numField(isDeparture ? 'Gidişte Beyan Edilen Yakıt Miktarı (Milli) KG'   : 'Gelişte Beyan Edilen Yakıt Miktarı (Milli) KG',   'fuelNational')}
-        ${numField(isDeparture ? 'Gidişte Beyan Edilen Yakıt Miktarı (Yabancı) KG' : 'Gelişte Beyan Edilen Yakıt Miktarı (Yabancı) KG', 'fuelForeign')}
+        ${fuelField(isDeparture ? 'Gidişte Beyan Edilen Yakıt Miktarı (Milli) KG'   : 'Gelişte Beyan Edilen Yakıt Miktarı (Milli) KG',   'fuelNational')}
+        ${fuelField(isDeparture ? 'Gidişte Beyan Edilen Yakıt Miktarı (Yabancı) KG' : 'Gelişte Beyan Edilen Yakıt Miktarı (Yabancı) KG', 'fuelForeign')}
       </div>`)}
 
     ${section('Açıklama', `
@@ -3985,6 +4023,11 @@ async function submitHavayoluBeyan() {
 
   if (_hvbState.isFlightContinue && !/^[A-Z]{3}$/.test(nextAirPortCode)) {
     alert('İç hat devamı için 3 harfli sonraki istasyon kodu gir.');
+    return;
+  }
+
+  if (!hvbHasPositiveFuel(_hvbState)) {
+    alert('Yakıt 0 olamaz. Milli veya Yabancı yakıt alanlarından en az birine 1 KG veya daha büyük bir değer gir.');
     return;
   }
 
