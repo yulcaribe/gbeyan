@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.8.7';
+  const CLIENT_VERSION = '1.8.8';
   const API_URL = (global.location?.protocol === 'http:' || global.location?.protocol === 'https:')
     ? global.location.origin
     : 'https://gbeyan.yulcaribe.com';
