@@ -7,7 +7,7 @@ import mailService from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 import { MailStore } from './mail-store.js';
 
-const VERSION = '1.8.0-mail-render';
+const VERSION = '1.8.1-mail-render';
 const HEADERS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
