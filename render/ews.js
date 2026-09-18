@@ -29,7 +29,7 @@ async function curlSoap(alias, password, operation, body) {
   const soap = soapEnvelope(body);
   await writeFile(soapPath, soap, { encoding: 'utf8', mode: 0o600 });
 
-  const domainUser = `${DOMAIN}\\\\${alias}`;
+  const domainUser = `${DOMAIN}\\${alias}`;
   const config = [
     `url = "${configValue(EWS_URL)}"`,
     'request = "POST"',
