@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.8.1';
+const QUICKBEYAN_VERSION = '1.8.2';
 
 const state = {
   busy: false,
@@ -310,18 +310,27 @@ async function checkMailConnectivity() {
 
 async function searchCrewMail(context) {
   const sourceToken = state.crewSourceToken;
-  const fetchCrew = globalThis.OtoBeyanApi?.flightCrew;
-  if (fetchCrew) {
+  const fetchCrewAttachment = globalThis.OtoBeyanApi?.flightAttachment || globalThis.OtoBeyanApi?.flightPdf;
+  if (fetchCrewAttachment && globalThis.GendecBrowser?.parseFile) {
     try {
-      const result = await fetchCrew({
-        flightNumber: context.flightNumber
+      const attachment = await fetchCrewAttachment(context.flightNumber);
+      const fileName = attachment.fileName || `${context.flightNumber}.pdf`;
+      const file = new File([attachment.blob], fileName, {
+        type: attachment.blob.type || 'application/octet-stream',
+        lastModified: Date.now()
+      });
+      const result = await globalThis.GendecBrowser.parseFile(file, {
+        flightNo: context.flightNumber,
+        tailNumber: context.tailNumber || '',
+        departurePortCode: context.departurePortCode || '',
+        arrivalPortCode: context.arrivalPortCode || ''
       });
       const crews = result?.crews;
       if (!Array.isArray(crews) || !crews.length) {
-        throw new Error('Sefer numarası doğrulanmış ekip listesi bulunamadı.');
+        throw new Error('GenDec bulundu fakat ekip listesi browser üzerinde ayrıştırılamadı.');
       }
       if (sourceToken !== state.crewSourceToken) return null;
-      renderCrewEditor(crews, `Mail GenDec · ${result.source?.attachmentName || context.flightNumber}`);
+      renderCrewEditor(crews, `Mail GenDec · ${fileName}`);
       return crews;
     } catch (error) {
       if (sourceToken !== state.crewSourceToken) return null;
@@ -333,7 +342,7 @@ async function searchCrewMail(context) {
     }
   }
 
-  addMessage('GenDec servisi kullanılamıyor. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
+  addMessage('GenDec servisi veya browser parser kullanılamıyor. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
   if (sourceToken === state.crewSourceToken && !state.crews.length) {
     renderCrewEditor([{ sourceTypeCode: 'MANUEL', crewTypeCode: 'CA' }], 'Manuel ekip');
   }
