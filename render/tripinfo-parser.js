@@ -7,8 +7,7 @@ export function parseTripInfoMessage(message, folder = '') {
   const flightNumber = normalizeFlightNumber(field(/\bFLIGHT\s*NO\s*:\s*([A-Z0-9]{2,3}\s*[- ]?\d{1,5}[A-Z]?)/i));
   const blockFuelKg = Number.parseInt(field(/\bBLOCK\s*FUEL\s*:\s*(\d{1,6})\b/i), 10);
   if (!flightDate || !flightNumber || !Number.isInteger(blockFuelKg)) return null;
-  const tailNumber = normalizeTail(field(/\bREGISTR?ATION\s*:\s*(TC[- ]?[A-Z0-9]{3})\b/i));
-  if (!tailNumber) return null;
+  const tailNumber = normalizeTail(field(/\bREGIST(?:RATION|IRATION|ERATION)\s*:\s*(TC[- ]?[A-Z0-9]{3,5})\b/i));
   const crew = text.match(/\bCREW\s*:\s*(\d+)\s*\/\s*(\d+)/i);
   const takeOffFuelKg = Number.parseInt(field(/\bT\/O\s*FUEL\s*:\s*(\d{1,6})\b/i), 10) || null;
   const taxiFuelKg = Number.parseInt(field(/\bTAXI\s*FUEL\s*:\s*(\d{1,6})\b/i), 10) || null;
