@@ -1,5 +1,5 @@
 /*
- * Version: v1.7.4
+ * Version: v1.8.5
  * NOZ / Norwegian compact GENDEC parser.
  * Sıkışık tablo formatını ekip satırlarına ayırır.
  */
@@ -9,7 +9,7 @@ function parseNorwegianCompactCrewLines(rawLines, helpers = globalThis.GendecPar
   const tableText = getNorwegianCompactCrewTableText(rawLines);
   if (!tableText) return [];
 
-  const rolePattern = 'CP|FO|SO|TO|FE|CM|CA|JU|PU|LM|FC|SCCM|CCM\\d*|CCM|ACM\\d*|ACM|CPT|CAPT|PIC';
+  const rolePattern = 'CP|FO|CC|CM|SO|TO|FE|CA|JU|PU|LM|FC|SCCM|CCM\\d*|CCM|ACM\\d*|ACM|CPT|CAPT|PIC';
   const compact = tableText
     .replace(/[\u00ad\u2010-\u2015]/g, '-')
     .replace(/\s+/g, '');
@@ -23,17 +23,27 @@ function parseNorwegianCompactCrewLines(rawLines, helpers = globalThis.GendecPar
   let match;
 
   while ((match = rx.exec(compact)) !== null) {
-    const rawType = match[1];
+    const rawType = match[1].toUpperCase();
     const surname = humanizeCompactCrewName(match[3]);
     const givenName = humanizeCompactCrewName(match[4]);
     const nationalityCode = match[8];
 
-    const crew = buildCrewFromNameParts(rawType, givenName, surname, nationalityCode, String(crews.length + 1), {
+    // Norwegian / DY role semantics are airline-specific:
+    // CC = Cabin Chief  -> HGBS CM
+    // CM = Cabin Member -> HGBS CA
+    const hgbType = rawType === 'CC' ? 'CM'
+      : rawType === 'CM' ? 'CA'
+      : rawType;
+
+    const crew = buildCrewFromNameParts(hgbType, givenName, surname, nationalityCode, String(crews.length + 1), {
       identityNumber: match[7] || '',
       dateOfBirth: parseCompactCrewDate(match[6])
     });
 
-    if (crew) crews.push(crew);
+    if (crew) crews.push({
+      ...crew,
+      sourceTypeCode: rawType
+    });
   }
 
   return crews;
