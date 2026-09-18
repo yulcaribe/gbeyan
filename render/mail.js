@@ -6,7 +6,6 @@
  */
 import { normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage } from './ldm-parser.js';
 import { parseTripInfoMessage } from './tripinfo-parser.js';
-import { attachmentCacheKey, parseGendecAttachment } from './gendec.js';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -434,156 +433,31 @@ function findFlightAttachments(messages, flightNo) {
   return candidates;
 }
 
-function flightNumberHints(value) {
-  const source = String(value || '').toUpperCase().replace(/[_./-]+/g, ' ');
-  const values = [];
-  const rx = /\b([A-Z0-9]{2,3})\s*(\d{1,5}[A-Z]?)\b/g;
-  let match;
-  while ((match = rx.exec(source)) !== null) {
-    if (!/[A-Z]/.test(match[1])) continue;
-    const normalized = normalizeFlightNumber(`${match[1]}${match[2]}`);
-    if (normalized && !values.includes(normalized)) values.push(normalized);
-  }
-  return values;
+function fileResponse(bytes, name, extraHeaders = {}) {
+  const safeName = String(name || 'attachment').replaceAll('"', '');
+  const lowerName = safeName.toLowerCase();
+  const contentType = lowerName.endsWith('.pdf')
+    ? 'application/pdf'
+    : lowerName.endsWith('.xlsx')
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : lowerName.endsWith('.xls')
+        ? 'application/vnd.ms-excel'
+        : 'application/octet-stream';
+  return new Response(bytes, { headers: {
+    ...cors,
+    'Content-Type': contentType,
+    'Content-Length': String(bytes.length),
+    'Content-Disposition': `attachment; filename="${safeName}"`,
+    'X-Attachment-Name': encodeURIComponent(safeName),
+    ...extraHeaders
+  } });
 }
 
-function detectGendecFlightNumber(message, attachment) {
-  for (const value of [attachment?.name, message?.subject, message?.body]) {
-    const flight = flightNumberHints(value)[0];
-    if (flight) return flight;
-  }
-  return '';
-}
-
-function gendecAttachmentRecords(messages = []) {
-  const records = [];
-  for (const message of messages) {
-    for (const attachment of message.attachments || []) {
-      if (!crewAttachmentExtension(attachment.name)) continue;
-      records.push({
-        key: attachmentCacheKey(message, attachment),
-        message,
-        attachment,
-        flightHint: detectGendecFlightNumber(message, attachment)
-      });
-    }
-  }
-  return records.sort((left, right) =>
-    String(right.message?.date || '').localeCompare(String(left.message?.date || ''))
-  );
-}
-
-function gendecClientPayload(record) {
-  if (!record?.ok || !record?.crews?.length || !record?.flightNumber) return null;
-  return {
-    ok: true,
-    status: 'ready',
-    flightNumber: record.flightNumber,
-    crews: record.crews,
-    source: {
-      receivedAt: record.receivedAt || '',
-      subject: record.subject || '',
-      attachmentName: record.attachmentName || ''
-    }
-  };
-}
-
-async function preparseGendecAttachments(alias, password, messages, cache) {
-  if (!cache) return;
-  const records = gendecAttachmentRecords(messages);
-  await cache.pruneParsedGendec?.(records.map(record => record.key));
-
-  for (const record of records) {
-    const existing = await cache.getParsedGendec?.(record.key);
-    const parsedAt = Date.parse(existing?.parsedAt || '');
-    const recentError = existing?.ok === false
-      && Number.isFinite(parsedAt)
-      && Date.now() - parsedAt < MAIL_CACHE_TTL_MS;
-    if (existing?.ok === true || recentError) continue;
-
-    const startedAt = new Date().toISOString();
-    await cache.setGendecParsingStatus?.({
-      active: true,
-      fileName: record.attachment.name,
-      flightNumber: record.flightHint,
-      startedAt,
-      completedAt: null,
-      error: null
-    });
-
-    try {
-      const bytes = await fetchAttachment(alias, password, record.attachment.id);
-      const parsed = await parseGendecAttachment(bytes, record.attachment, {
-        flightNo: record.flightHint
-      });
-      const flightNumber = record.flightHint
-        || parsed.flightNumbers?.map(normalizeFlightNumber).find(Boolean)
-        || '';
-      const crews = parsed.crews || [];
-      const error = !flightNumber
-        ? 'GenDec sefer numarası belirlenemedi.'
-        : !crews.length
-          ? 'GenDec ekip listesi okunamadı.'
-          : null;
-      const entry = {
-        ok: !error,
-        flightNumber,
-        receivedAt: String(record.message.date || ''),
-        messageId: String(record.message.id || ''),
-        attachmentId: String(record.attachment.id || ''),
-        attachmentName: String(record.attachment.name || ''),
-        size: Number(record.attachment.size || 0),
-        subject: String(record.message.subject || ''),
-        from: String(record.message.from || ''),
-        parsedAt: new Date().toISOString(),
-        parser: parsed.parser || '',
-        crews,
-        parsed,
-        error
-      };
-      entry.clientPayload = gendecClientPayload(entry);
-      await cache.saveParsedGendec?.(record.key, entry);
-      await cache.setGendecParsingStatus?.({
-        active: false,
-        fileName: record.attachment.name,
-        flightNumber,
-        completedAt: entry.parsedAt,
-        error
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const entry = {
-        ok: false,
-        flightNumber: record.flightHint,
-        receivedAt: String(record.message.date || ''),
-        messageId: String(record.message.id || ''),
-        attachmentId: String(record.attachment.id || ''),
-        attachmentName: String(record.attachment.name || ''),
-        size: Number(record.attachment.size || 0),
-        subject: String(record.message.subject || ''),
-        from: String(record.message.from || ''),
-        parsedAt: new Date().toISOString(),
-        parser: '',
-        crews: [],
-        parsed: null,
-        clientPayload: null,
-        error: message
-      };
-      await cache.saveParsedGendec?.(record.key, entry);
-      await cache.setGendecParsingStatus?.({
-        active: false,
-        fileName: record.attachment.name,
-        flightNumber: record.flightHint,
-        completedAt: entry.parsedAt,
-        error: message
-      });
-    }
-  }
-}
 const cors = {
   'Access-Control-Allow-Origin': 'null',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer'
@@ -776,7 +650,6 @@ export async function refreshMailCache(env, cache, hours = DEFAULT_LOOKBACK_HOUR
   const results = await loadConfiguredMessages(alias, env.EWS_PASSWORD, settings);
   const cleanup = await cleanOldMail(alias, env.EWS_PASSWORD, results, previous, hours);
   const snapshot = snapshotFrom(results, settings, hours, previous, cleanup);
-  await preparseGendecAttachments(alias, env.EWS_PASSWORD, snapshot.gendecMessages, cache);
   if (cache?.saveMailSnapshot) await cache.saveMailSnapshot(snapshot);
   return snapshot;
 }
@@ -837,8 +710,8 @@ export default {
         const snapshot = await getSnapshot(hours, url.searchParams.get('refresh') === '1');
         return json(snapshot);
       }
-      if (route === '/api/flight-crew') {
-        const flightNo = normalizeFlightNumber(url.searchParams.get('flightNumber'));
+      if (route === '/api/flight-attachment' || route === '/api/flight-pdf') {
+        const flightNo = normalizeFlightNumber(url.searchParams.get('flightNo') || url.searchParams.get('flightNumber'));
         if (!flightNo) return json({ error: 'Uçuş numarası gerekli.' }, 400);
         const hours = lookbackHours(url);
         const cacheOnly = url.searchParams.get('cache') === '1';
@@ -848,28 +721,29 @@ export default {
         if (cacheOnly && !stored) {
           return json({ error: 'Mail önbelleği henüz hazır değil. Önce mail verisini yenile.' }, 409);
         }
-        if (!cacheOnly) await getSnapshot(hours);
-
-        const latest = await services.mailCache?.getLatestGendecByFlight?.(flightNo);
-        if (!latest) {
+        const snapshot = cacheOnly
+          ? { ...stored, gendecMessages: recentMessages(stored.gendecMessages || stored.messages, hours) }
+          : await getSnapshot(hours);
+        const candidates = findFlightAttachments(snapshot.gendecMessages || snapshot.messages, flightNo);
+        const match = candidates[0] || null;
+        if (!match) {
           return json({
-            error: `Son ${hours} saatte ${flightNo} uçuşu için parse edilmiş GenDec bulunamadı.`
+            error: `Son ${hours} saatte ${flightNo} uçuşu için PDF veya Excel GenDec eki bulunamadı.`,
+            searchedMessages: (snapshot.gendecMessages || snapshot.messages || []).length,
+            folder: snapshot.settings?.gendec || ''
           }, 404);
         }
-        if (!latest.ok || !latest.clientPayload) {
-          return json({
-            ok: false,
-            status: 'parse_error',
-            flightNumber: flightNo,
-            error: latest.error || 'En yeni GenDec parse edilemedi.',
-            source: {
-              receivedAt: latest.receivedAt || '',
-              subject: latest.subject || '',
-              attachmentName: latest.attachmentName || ''
-            }
-          }, 404);
-        }
-        return json(latest.clientPayload);
+        const bytes = await fetchAttachment(alias, password, match.attachment.id);
+        return fileResponse(bytes, match.attachment.name, {
+          'X-Mail-Subject': encodeURIComponent(String(match.message.subject || ''))
+        });
+      }
+      if (route === '/api/attachment') {
+        const attachmentId = url.searchParams.get('id');
+        const name = url.searchParams.get('name') || 'attachment';
+        if (!attachmentId) return json({ error: 'id eksik.' }, 400);
+        const bytes = await fetchAttachment(alias, password, attachmentId);
+        return fileResponse(bytes, name);
       }
       if (route === '/api/flight-data') {
         const flightNumber = normalizeFlightNumber(url.searchParams.get('flightNumber'));
