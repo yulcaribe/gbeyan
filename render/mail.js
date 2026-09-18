@@ -1,6 +1,6 @@
 /*
  * OtoBeyan TGS Exchange ActiveSync mail module
- * Version: v1.7.4
+ * Version: v1.8.3
  * Production credentials come from server environment variables.
  * Credentials stay on the server.
  */
