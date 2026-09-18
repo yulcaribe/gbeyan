@@ -6,6 +6,7 @@
  */
 import { normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage } from './ldm-parser.js';
 import { parseTripInfoMessage } from './tripinfo-parser.js';
+import { emptyDeletedItems } from './ews.js';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -186,11 +187,11 @@ function syncPayload(collectionId, syncKey, getChanges) {
 
   return document(tag(0, 5, tag(0, 28, tag(0, 15, collection))));
 }
-function deleteMessagesPayload(collectionId, syncKey, messageIds) {
+function deleteMessagesPayload(collectionId, syncKey, messageIds, deletesAsMoves = false) {
   return document(tag(0, 5, tag(0, 28, tag(0, 15, [
     tag(0, 11, text(syncKey)),
     tag(0, 18, text(collectionId)),
-    tag(0, 30, text('0')),
+    tag(0, 30, text(deletesAsMoves ? '1' : '0')),
     tag(0, 22, messageIds.map(messageId => tag(0, 9, tag(0, 13, text(messageId)))))
   ]))));
 }
@@ -293,17 +294,17 @@ async function loadMessages(alias, password, folder) {
   messages.sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return { folder, messages, syncKey, pages, moreAvailable, limit: WINDOW_SIZE * MAX_SYNC_PAGES };
 }
-async function permanentlyDeleteMessages(alias, password, loadedFolder, messageIds) {
+async function deleteMessages(alias, password, loadedFolder, messageIds, deletesAsMoves = false) {
   let syncKey = loadedFolder.syncKey;
   let deleted = 0;
   const uniqueIds = [...new Set(messageIds.map(value => String(value || '')).filter(Boolean))];
 
   for (let index = 0; index < uniqueIds.length; index += WINDOW_SIZE) {
     const batch = uniqueIds.slice(index, index + WINDOW_SIZE);
-    const result = await eas(alias, password, 'Sync', deleteMessagesPayload(loadedFolder.folder.id, syncKey, batch));
+    const result = await eas(alias, password, 'Sync', deleteMessagesPayload(loadedFolder.folder.id, syncKey, batch, deletesAsMoves));
     const collection = nodes(result.tree, 'Collection')[0] || result.tree;
     const status = child(collection, 'Status')?.text || first(result.tree, 'Status');
-    if (status !== '1') throw new Error(`Exchange kalici silme hatasi: Status ${status || 'yok'}.`);
+    if (status !== '1') throw new Error(`Exchange silme/tasima hatasi: Status ${status || 'yok'}.`);
     for (const response of nodes(child(collection, 'Responses') || collection, 'Delete')) {
       const commandStatus = first(response, 'Status');
       const serverId = first(response, 'ServerId');
@@ -317,7 +318,7 @@ async function permanentlyDeleteMessages(alias, password, loadedFolder, messageI
     const verification = await loadMessages(alias, password, loadedFolder.folder);
     const remaining = new Set(verification.messages.map(message => message.id));
     const failed = batch.filter(id => remaining.has(id));
-    if (failed.length) throw new Error(`Exchange kalici silme dogrulamasi basarisiz: ${failed.length} mail hâlâ klasörde.`);
+    if (failed.length) throw new Error(`Exchange silme/tasima dogrulamasi basarisiz: ${failed.length} mail hâlâ kaynak klasörde.`);
     loadedFolder.messages = loadedFolder.messages.filter(message => !batch.includes(message.id));
     deleted += batch.length;
   }
@@ -515,36 +516,42 @@ async function cleanOldMail(alias, password, results, previous, hours = DEFAULT_
     cutoff: new Date(now - hours * 60 * 60 * 1000).toISOString(),
     sourceDeleted: 0,
     trashDeleted: 0,
+    trashCleared: false,
     errors: []
   };
 
+  // Kaynak klasörlerde yalnızca 15 saatten eski mailleri Çöp Kutusu'na taşı.
   for (const [path, loaded] of results.byPath) {
     const ids = oldMessages(loaded.messages, hours, now).map(message => message.id);
     if (!ids.length) continue;
     try {
-      cleanup.sourceDeleted += await permanentlyDeleteMessages(alias, password, loaded, ids);
+      cleanup.sourceDeleted += await deleteMessages(alias, password, loaded, ids, true);
       loaded.messages = loaded.messages.filter(message => !ids.includes(message.id));
     } catch (error) {
       cleanup.errors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
+  // Çöp Kutusu için SAAT FİLTRESİ YOK. Her gerçek refresh'te tamamını
+  // çalışan Beyan Mail projesindeki EWS EmptyFolder/HardDelete yöntemiyle temizle.
   cleanup.trashAt = cleanup.at;
-
-  const trashFolder = results.records.find(folder => String(folder.type) === '4');
-  if (!trashFolder) {
-    cleanup.errors.push('Çöp Kutusu klasörü Exchange tarafından bulunamadı.');
-    return cleanup;
-  }
-
   try {
-    const trash = await loadMessages(alias, password, trashFolder);
-    const trashIds = oldMessages(trash.messages, hours, now)
-      .map(message => message.id);
-    cleanup.trashDeleted = await permanentlyDeleteMessages(alias, password, trash, trashIds);
+    const trashFolder = results.records.find(folder => String(folder.type) === '4');
+    if (trashFolder) {
+      try {
+        const trash = await loadMessages(alias, password, trashFolder);
+        cleanup.trashDeleted = trash.messages.length;
+      } catch (error) {
+        cleanup.errors.push(`Çöp Kutusu sayımı: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    await emptyDeletedItems(alias, password);
+    cleanup.trashCleared = true;
   } catch (error) {
-    cleanup.errors.push(`Çöp Kutusu: ${error instanceof Error ? error.message : String(error)}`);
+    cleanup.errors.push(`Çöp Kutusu HardDelete: ${error instanceof Error ? error.message : String(error)}`);
   }
+
   return cleanup;
 }
 
@@ -781,7 +788,7 @@ export default {
         if (!trashFolder) return json({ error: 'Çöp Kutusu bulunamadı.' }, 404);
         const trash = await loadMessages(alias, password, trashFolder);
         if (!trash.messages.some(message => message.id === messageId)) return json({ error: 'Mail çöp kutusunda bulunamadı.' }, 404);
-        const deleted = await permanentlyDeleteMessages(alias, password, trash, [messageId]);
+        const deleted = await deleteMessages(alias, password, trash, [messageId], false);
         return json({ ok: deleted === 1, permanentlyDeleted: deleted });
       }
       return json({ error: 'Not found' }, 404);
