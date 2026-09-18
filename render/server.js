@@ -7,10 +7,11 @@ import mailService from './mail.js';
 import PRIVATE_PAGE from './private-page.js';
 import { MailStore } from './mail-store.js';
 
-const VERSION = '1.8.1-mail-render';
+const VERSION = '1.8.2-mail-browser-parse';
 const HEADERS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
@@ -74,77 +75,22 @@ export function createBackend(env = process.env, store = new MailStore()) {
       return json({ ok: true, version: VERSION, backend: 'mail',
         ready: Boolean(env.EWS_USERNAME && env.EWS_PASSWORD), storage: 'memory' });
     }
-    if (url.pathname === '/api/admin/parser-status' && request.method === 'GET') {
-      return json({
-        ok: true,
-        parser: await store.getGendecParsingStatus()
-      });
-    }
     if (url.pathname === '/api/admin/snapshot' && request.method === 'GET') {
+      // Uses the same lazy refresh as personnel requests; there is no idle polling.
       const response = await mailService.fetch(new Request('http://backend.local/api/mail/messages', {
         headers: { Authorization: request.headers.get('Authorization') }
       }), env, services);
       if (!response.ok) return response;
       const snapshot = await response.json();
-
-      const parsedEntries = await store.getParsedGendecEntries();
-      const parsedByKey = new Map(parsedEntries.map(entry => [entry.key, entry]));
-      const latestKeyByFlight = new Map();
-      for (const entry of [...parsedEntries].sort((left, right) =>
-        String(right.receivedAt || '').localeCompare(String(left.receivedAt || ''))
-        || String(right.parsedAt || '').localeCompare(String(left.parsedAt || ''))
-      )) {
-        if (entry.flightNumber && !latestKeyByFlight.has(entry.flightNumber)) {
-          latestKeyByFlight.set(entry.flightNumber, entry.key);
-        }
-      }
-
-      const genDec = [];
-      for (const message of snapshot.gendecMessages || snapshot.messages || []) {
-        for (const file of message.attachments || []) {
-          if (!/\.(pdf|xlsx|xls)$/i.test(file.name || '')) continue;
-          const key = [message.id, file.id, Number(file.size || 0)].map(String).join('|');
-          const entry = parsedByKey.get(key) || null;
-          const isLatest = Boolean(entry?.flightNumber)
-            && latestKeyByFlight.get(entry.flightNumber) === key;
-          const state = !entry
-            ? 'unparsed'
-            : entry.error
-              ? (isLatest ? 'error' : 'superseded')
-              : isLatest
-                ? 'active'
-                : 'superseded';
-          genDec.push({
-            key,
-            date: message.date || '',
-            subject: message.subject || '',
-            from: message.from || '',
-            fileName: file.name || '',
-            size: Number(file.size || 0),
-            flightNumber: entry?.flightNumber || '',
-            state,
-            active: state === 'active',
-            parsedAt: entry?.parsedAt || null,
-            parser: entry?.parser || '',
-            error: entry?.error || null,
-            clientPayload: entry?.clientPayload || null,
-            parsed: entry?.parsed || null
-          });
-        }
-      }
-
-      return json({
-        ok: true,
-        version: VERSION,
-        cachedAt: snapshot.cachedAt,
-        expiresAt: snapshot.expiresAt,
-        settings: snapshot.settings,
-        folderStatus: snapshot.folderStatus,
-        cleanup: snapshot.cleanup,
-        flights: snapshot.flights || [],
-        parsed: snapshot.parsed || { ldm: [], tripInfo: [] },
-        parserStatus: await store.getGendecParsingStatus(),
-        genDec
+      return json({ ok: true, version: VERSION,
+        cachedAt: snapshot.cachedAt, expiresAt: snapshot.expiresAt,
+        settings: snapshot.settings, folderStatus: snapshot.folderStatus, cleanup: snapshot.cleanup,
+        flights: snapshot.flights || [], parsed: snapshot.parsed || { ldm: [], tripInfo: [] },
+        genDec: (snapshot.gendecMessages || snapshot.messages || []).map(message => ({
+          date: message.date || '', subject: message.subject || '', from: message.from || '',
+          attachments: (message.attachments || []).filter(file => /\.(pdf|xlsx|xls)$/i.test(file.name || ''))
+            .map(file => ({ name: file.name, size: Number(file.size || 0) }))
+        })).filter(message => message.attachments.length)
       });
     }
     if (url.pathname.startsWith('/api/mail/')) return mailService.fetch(request, env, services);
