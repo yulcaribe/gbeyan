@@ -6,17 +6,14 @@ declare(strict_types=1);
  * config.local.php is ignored by Git and must contain the real secrets only on the server.
  *
  * Real environment variables, when present, take precedence over these values.
+ * Mail folder paths are managed from the /api/ control panel and stored in storage/settings.json.
  */
 return [
     'TEST_API_KEY' => 'CHANGE_ME',
     'EWS_USERNAME' => 'CHANGE_ME',
     'EWS_PASSWORD' => 'CHANGE_ME',
 
-    'GENDEC' => 'GENDEC',
-    'LDM' => 'LDM',
-    'TRIPINFO' => 'TRIPINFO',
-
     // Optional:
-    // 'CORS_ALLOWED_ORIGINS' => 'https://beyan.example.com',
+    // 'CORS_ALLOWED_ORIGINS' => 'https://example.com',
     // 'EXCHANGE_VERIFY_TLS' => true,
 ];

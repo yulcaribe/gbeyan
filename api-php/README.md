@@ -15,16 +15,16 @@ Bu proje cPanel/shared-hosting üzerinde çalışan PHP 8.1+ backend'dir. Node.j
 Gerçek secret değerlerini repoya yazma. cPanel sunucusunda `api-php/config.local.php` oluştur ve
 `api-php/config.local.example.php` dosyasını örnek al.
 
-Desteklenen ayarlar:
+Sunucuda tutulacak secret/opsiyonel ayarlar:
 
 - `TEST_API_KEY`
 - `EWS_USERNAME`
 - `EWS_PASSWORD`
-- `GENDEC` veya `GENDEC_FOLDER_PATH`
-- `LDM` veya `LDM_FOLDER_PATH`
-- `TRIPINFO` veya `TRIP_INFO_FOLDER_PATH`
 - isteğe bağlı `CORS_ALLOWED_ORIGINS`
 - isteğe bağlı `EXCHANGE_VERIFY_TLS`
+
+GENDEC, LDM ve TRIPINFO klasör yolları `/api/` kontrol panelinden yönetilir ve
+`api-php/storage/settings.json` dosyasına kaydedilir.
 
 ## Adresler
 

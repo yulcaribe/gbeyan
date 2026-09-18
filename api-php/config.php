@@ -68,10 +68,11 @@ return [
     'lookback_hours' => 15,
     'cache_ttl_seconds' => 300,
     'storage_dir' => __DIR__ . '/storage',
+    // First-run labels only. After the first save, folder paths live in storage/settings.json.
     'settings_defaults' => [
-        'gendec' => (string) (gb_env('GENDEC_FOLDER_PATH') ?: gb_env('GENDEC', 'SXS\\GenDec')),
-        'ldm' => (string) (gb_env('LDM_FOLDER_PATH') ?: gb_env('LDM', 'SXS\\GenDec')),
-        'tripInfo' => (string) (gb_env('TRIP_INFO_FOLDER_PATH') ?: gb_env('TRIPINFO', 'SXS\\GenDec')),
+        'gendec' => 'GENDEC',
+        'ldm' => 'LDM',
+        'tripInfo' => 'TRIPINFO',
     ],
     'allowed_origins' => array_values(array_unique($origins)),
 ];

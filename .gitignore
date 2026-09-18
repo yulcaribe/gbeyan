@@ -1,13 +1,11 @@
-/.codex-remote-attachments
 .DS_Store
-10.09.2026 DAILY.xlsx
-yulcaribe-main/index.html
 
-# Server-only credentials and runtime state
+# Server-only credentials
 .env
 .env.*
-!.env.example
 api-php/config.local.php
-api-php/storage/*
-!api-php/storage/.gitignore
-!api-php/storage/.htaccess
+
+# Runtime cache/settings/lock files
+api-php/storage/*.json
+api-php/storage/*.lock
+api-php/storage/*.tmp
