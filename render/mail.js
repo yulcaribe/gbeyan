@@ -458,7 +458,7 @@ const cors = {
   'Access-Control-Allow-Origin': 'null',
   'Access-Control-Allow-Headers': 'Authorization, Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, Content-Disposition',
+  'Access-Control-Expose-Headers': 'X-Attachment-Name, X-Mail-Subject, X-Mail-Date, X-Candidate-Index, X-Candidate-Count, Content-Disposition',
   'Cache-Control': 'no-store',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer'
@@ -732,17 +732,25 @@ export default {
           ? { ...stored, gendecMessages: recentMessages(stored.gendecMessages || stored.messages, hours) }
           : await getSnapshot(hours);
         const candidates = findFlightAttachments(snapshot.gendecMessages || snapshot.messages, flightNo);
-        const match = candidates[0] || null;
+        const candidateIndex = Math.max(0, Number.parseInt(url.searchParams.get('candidate') || '0', 10) || 0);
+        const match = candidates[candidateIndex] || null;
         if (!match) {
           return json({
-            error: `Son ${hours} saatte ${flightNo} uçuşu için PDF veya Excel GenDec eki bulunamadı.`,
+            error: candidateIndex
+              ? `${flightNo} için başka GenDec adayı kalmadı.`
+              : `Son ${hours} saatte ${flightNo} uçuşu için PDF veya Excel GenDec eki bulunamadı.`,
             searchedMessages: (snapshot.gendecMessages || snapshot.messages || []).length,
+            candidateCount: candidates.length,
+            candidateIndex,
             folder: snapshot.settings?.gendec || ''
           }, 404);
         }
         const bytes = await fetchAttachment(alias, password, match.attachment.id);
         return fileResponse(bytes, match.attachment.name, {
-          'X-Mail-Subject': encodeURIComponent(String(match.message.subject || ''))
+          'X-Mail-Subject': encodeURIComponent(String(match.message.subject || '')),
+          'X-Mail-Date': encodeURIComponent(String(match.message.date || '')),
+          'X-Candidate-Index': String(candidateIndex),
+          'X-Candidate-Count': String(candidates.length)
         });
       }
       if (route === '/api/attachment') {
