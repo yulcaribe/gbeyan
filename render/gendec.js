@@ -1,4 +1,5 @@
-import * as pdfjs from 'pdfjs-dist/build/pdf.js';
+import * as pdfjsModule from 'pdfjs-dist/legacy/build/pdf.js';
+const pdfjs = pdfjsModule.default?.getDocument ? pdfjsModule.default : pdfjsModule;
 import * as XLSX from 'xlsx';
 import '../gendec/parser.js';
 import '../gendec/noz.js';
