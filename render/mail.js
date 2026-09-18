@@ -776,8 +776,8 @@ export async function refreshMailCache(env, cache, hours = DEFAULT_LOOKBACK_HOUR
   const results = await loadConfiguredMessages(alias, env.EWS_PASSWORD, settings);
   const cleanup = await cleanOldMail(alias, env.EWS_PASSWORD, results, previous, hours);
   const snapshot = snapshotFrom(results, settings, hours, previous, cleanup);
-  if (cache?.saveMailSnapshot) await cache.saveMailSnapshot(snapshot);
   await preparseGendecAttachments(alias, env.EWS_PASSWORD, snapshot.gendecMessages, cache);
+  if (cache?.saveMailSnapshot) await cache.saveMailSnapshot(snapshot);
   return snapshot;
 }
 
