@@ -69,14 +69,14 @@ export async function parseGendecAttachment(bytes, attachment, context = {}) {
   };
 }
 
-export function matchesFlightAndTail(parsed, flightNumber, tailNumber) {
+export function matchesFlightNumber(parsed, flightNumber) {
   const wantedFlight = globalThis.GendecParser.normalizeFlightNumber(flightNumber);
-  const wantedTail = globalThis.GendecParser.normalizeTailNumber(tailNumber);
   const aliases = { FHY: 'FH', FH: 'FHY', STW: '2S', '2S': 'STW', TWI: 'TI', TI: 'TWI' };
   const variants = new Set([wantedFlight]);
   for (const [prefix, alias] of Object.entries(aliases)) {
     if (wantedFlight.startsWith(prefix)) variants.add(alias + wantedFlight.slice(prefix.length));
   }
-  return parsed?.flightNumbers?.some(value => variants.has(globalThis.GendecParser.normalizeFlightNumber(value)))
-    && parsed?.tailNumbers?.some(value => globalThis.GendecParser.normalizeTailNumber(value) === wantedTail);
+  return parsed?.flightNumbers?.some(value =>
+    variants.has(globalThis.GendecParser.normalizeFlightNumber(value))
+  ) || false;
 }
