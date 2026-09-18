@@ -504,7 +504,7 @@ async function loadCrewFromMailCache(button) {
   setCrewStatus('info', `${flightNumber} için önbellekteki GenDec aranıyor...`);
 
   try {
-    const result = await api.flightCrew({ flightNumber, tailNumber, cacheOnly: true });
+    const result = await api.flightCrew({ flightNumber, cacheOnly: true });
     if (!result.crews?.length) throw new Error('Ekip listesi bulunamadı.');
     _crewParsedList = result.crews;
     renderCrewPreview();
