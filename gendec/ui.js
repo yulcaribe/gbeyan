@@ -486,13 +486,12 @@ async function loadCrewFromMailCache(button) {
   const flightNumber = String(d.flightNumber || '').trim();
   const api = globalThis.OtoBeyanApi;
 
-  const tailNumber = String(d.tailNumber || '').trim();
-  if (!flightNumber || !tailNumber) {
-    setCrewStatus('error', 'Uçuş numarası veya kuyruk numarası bulunamadı.');
+  if (!flightNumber) {
+    setCrewStatus('error', 'Uçuş numarası bulunamadı.');
     return;
   }
-  if (!api?.flightCrew) {
-    setCrewStatus('error', 'Mail servisi açık değil. Önce erişim anahtarıyla Hızlı Beyan bağlantısını aç.');
+  if (!api?.cachedFlightAttachment || !globalThis.GendecBrowser?.parseFile) {
+    setCrewStatus('error', 'Mail servisi veya browser GenDec parser hazır değil.');
     return;
   }
 
@@ -501,14 +500,25 @@ async function loadCrewFromMailCache(button) {
     button.disabled = true;
     button.textContent = 'Mail önbelleği aranıyor...';
   }
-  setCrewStatus('info', `${flightNumber} için önbellekteki GenDec aranıyor...`);
+  setCrewStatus('info', `${flightNumber} için GenDec eki indiriliyor ve bilgisayarında okunuyor...`);
 
   try {
-    const result = await api.flightCrew({ flightNumber, cacheOnly: true });
-    if (!result.crews?.length) throw new Error('Ekip listesi bulunamadı.');
+    const attachment = await api.cachedFlightAttachment(flightNumber);
+    const fileName = attachment.fileName || `${flightNumber}.pdf`;
+    const file = new File([attachment.blob], fileName, {
+      type: attachment.blob.type || 'application/octet-stream',
+      lastModified: Date.now()
+    });
+    const result = await globalThis.GendecBrowser.parseFile(file, {
+      flightNo: flightNumber,
+      tailNumber: d.tailNumber || '',
+      departurePortCode: d.departurePortCode || '',
+      arrivalPortCode: d.arrivalPortCode || ''
+    });
+    if (!result?.crews?.length) throw new Error('Ekip listesi bulunamadı.');
     _crewParsedList = result.crews;
     renderCrewPreview();
-    setCrewStatus('success', `${result.crews.length} ekip OnRender üzerinde ayrıştırılmış JSON'dan alındı.`);
+    setCrewStatus('success', `${result.crews.length} ekip mail GenDec dosyasından bilgisayarında okundu.`);
     setCrewSubmitDisabled(false);
   } catch (error) {
     setCrewStatus('error', 'Mail önbelleğinden ekip alınamadı: ' + error.message);
