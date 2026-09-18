@@ -2,11 +2,20 @@
 declare(strict_types=1);
 
 $gbLocalConfig = [];
-$gbLocalConfigPath = __DIR__ . '/config.local.php';
-if (is_file($gbLocalConfigPath)) {
+$gbLocalConfigPaths = [
+    '/etc/secrets/config.local.php', // Render / Docker secret file
+    __DIR__ . '/config.local.php',   // cPanel / shared hosting
+];
+
+foreach ($gbLocalConfigPaths as $gbLocalConfigPath) {
+    if (!is_file($gbLocalConfigPath)) {
+        continue;
+    }
+
     $loadedLocalConfig = require $gbLocalConfigPath;
     if (is_array($loadedLocalConfig)) {
         $gbLocalConfig = $loadedLocalConfig;
+        break;
     }
 }
 
