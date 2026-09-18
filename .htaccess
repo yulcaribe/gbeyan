@@ -6,6 +6,9 @@ RewriteEngine On
 RewriteCond %{HTTP:Authorization} .
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+# Health check for Render / Docker hosts.
+RewriteRule ^healthz$ api-php/index.php [QSA,L]
+
 # When this repository is the domain document root, keep the public API path
 # stable while the PHP implementation lives under api-php/.
 RewriteRule ^api(?:/.*)?$ api-php/index.php [QSA,L]

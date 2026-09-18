@@ -1,0 +1,9 @@
+.git
+.github
+.DS_Store
+.env
+.env.*
+api-php/config.local.php
+api-php/storage/*.json
+api-php/storage/*.lock
+api-php/storage/*.tmp
