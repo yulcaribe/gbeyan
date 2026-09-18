@@ -324,9 +324,10 @@ final class MailService
 
             try {
                 $syncKey = (string) ($loaded['syncKey'] ?? '');
+                $movedCount = 0;
                 foreach (array_chunk($ids, 100) as $batch) {
                     $syncKey = $this->eas->deleteMessages((string) $loaded['folder']['id'], $syncKey, $batch, true);
-                    $cleanup['sourceDeleted'] += count($batch);
+                    $movedCount += count($batch);
                 }
                 $loaded['syncKey'] = $syncKey;
 
@@ -339,6 +340,7 @@ final class MailService
                 if ($failed !== []) {
                     throw new RuntimeException('Exchange silme/tasima dogrulamasi basarisiz: ' . count($failed) . ' mail hâlâ kaynak klasörde.');
                 }
+                $cleanup['sourceDeleted'] += $movedCount;
                 $loaded['messages'] = array_values(array_filter($loaded['messages'] ?? [], static fn(array $message): bool =>
                     !in_array((string) ($message['id'] ?? ''), $ids, true)
                 ));
