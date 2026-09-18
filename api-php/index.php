@@ -13,6 +13,7 @@ require_once __DIR__ . '/MailCache.php';
 require_once __DIR__ . '/LdmParser.php';
 require_once __DIR__ . '/TripInfoParser.php';
 require_once __DIR__ . '/MailService.php';
+require_once __DIR__ . '/private-page.php';
 
 gb_apply_common_headers($config);
 
@@ -21,6 +22,10 @@ $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
 if ($path === '/healthz' && $method === 'GET') {
     gb_send_json(['ok' => true, 'version' => $config['version']]);
+}
+
+if (($path === '/api' || $path === '/api/') && $method === 'GET') {
+    gb_send_private_page();
 }
 
 if (str_starts_with($path, '/api/') && !gb_origin_allowed($config)) {
@@ -59,7 +64,7 @@ if ($path === '/api/auth/verify' && $method === 'GET') {
     ]);
 }
 
-if (!str_starts_with($path, '/api/mail/')) {
+if (!str_starts_with($path, '/api/mail/') && $path !== '/api/admin/snapshot') {
     http_response_code(404);
     exit;
 }
@@ -72,6 +77,47 @@ try {
     $cache = new MailCache((string) $config['storage_dir']);
     $service = new MailService($config, $cache);
     $hours = (int) ($config['lookback_hours'] ?? 15);
+
+    if ($path === '/api/admin/snapshot' && $method === 'GET') {
+        $snapshot = $service->getSnapshot(false);
+        $genDec = [];
+
+        foreach (($snapshot['gendecMessages'] ?? $snapshot['messages'] ?? []) as $message) {
+            $attachments = [];
+            foreach (($message['attachments'] ?? []) as $attachment) {
+                $name = (string) ($attachment['name'] ?? '');
+                if (preg_match('/\.(pdf|xlsx|xls)$/i', $name) !== 1) {
+                    continue;
+                }
+                $attachments[] = [
+                    'name' => $name,
+                    'size' => (int) ($attachment['size'] ?? 0),
+                ];
+            }
+            if ($attachments === []) {
+                continue;
+            }
+            $genDec[] = [
+                'date' => (string) ($message['date'] ?? ''),
+                'subject' => (string) ($message['subject'] ?? ''),
+                'from' => (string) ($message['from'] ?? ''),
+                'attachments' => $attachments,
+            ];
+        }
+
+        gb_send_json([
+            'ok' => true,
+            'version' => $config['version'],
+            'cachedAt' => $snapshot['cachedAt'] ?? null,
+            'expiresAt' => $snapshot['expiresAt'] ?? null,
+            'settings' => $snapshot['settings'] ?? [],
+            'folderStatus' => $snapshot['folderStatus'] ?? [],
+            'cleanup' => $snapshot['cleanup'] ?? [],
+            'flights' => $snapshot['flights'] ?? [],
+            'parsed' => $snapshot['parsed'] ?? ['ldm' => [], 'tripInfo' => []],
+            'genDec' => $genDec,
+        ]);
+    }
 
     if ($path === '/api/mail/settings' && $method === 'GET') {
         gb_send_json(['ok' => true, 'settings' => $service->currentSettings()]);
