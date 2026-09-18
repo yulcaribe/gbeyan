@@ -610,6 +610,23 @@ function clearActionPanel() {
   state.actionPanel = null;
 }
 
+function updateQuickDeclarationReadiness() {
+  const panel = state.actionPanel;
+  if (!panel) return;
+  const fuelReady = Number(state.declaration?.fuel || 0) > 0;
+  const crewReady = state.crews.length > 0;
+  const button = panel.querySelector('[data-open-declare]');
+  if (button) button.disabled = !(fuelReady && crewReady);
+  const hint = panel.querySelector('.otobeyan-source-arrow');
+  if (hint) {
+    hint.textContent = fuelReady && crewReady
+      ? 'Aç + Beyan Et bu ekrandaki tek onaydır; işlem sağ alttaki bildirimden takip edilir.'
+      : !fuelReady
+        ? 'Aç + Beyan Et için yakıt en az 1 KG olmalı.'
+        : 'Aç + Beyan Et için önce ekip PDF bulunmalı veya yüklenmeli.';
+  }
+}
+
 function updateDeclarationValue(key, value, control = null) {
   if (!state.declaration) return;
   if (key === 'fuelType') {
@@ -625,7 +642,7 @@ function updateDeclarationValue(key, value, control = null) {
   } else {
     state.declaration[key] = Math.max(0, Number.parseInt(value, 10) || 0);
   }
-  renderActionPanel();
+  updateQuickDeclarationReadiness();
   renderLiveSummary();
 }
 
