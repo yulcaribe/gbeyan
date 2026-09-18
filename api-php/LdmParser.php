@@ -17,8 +17,11 @@ final class LdmParser
         }
 
         $candidates = [];
+        $monthAnchor = $received->modify('first day of this month')->setTime(0, 0, 0);
         foreach ([-1, 0, 1] as $offset) {
-            $monthBase = $received->modify(($offset >= 0 ? '+' : '') . $offset . ' month');
+            $monthBase = $offset === 0
+                ? $monthAnchor
+                : $monthAnchor->modify(($offset > 0 ? '+' : '') . $offset . ' month');
             $ym = $monthBase->format('Y-m');
             $candidate = DateTimeImmutable::createFromFormat('!Y-m-d', $ym . '-' . sprintf('%02d', $day), new DateTimeZone('UTC'));
             if (!$candidate || $candidate->format('d') !== sprintf('%02d', $day) || $candidate->format('Y-m') !== $ym) {
