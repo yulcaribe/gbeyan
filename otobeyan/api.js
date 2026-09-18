@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.8.2';
+  const CLIENT_VERSION = '1.8.4';
   const API_URL = 'https://gbeyan-api.onrender.com';
   let accessCode = '';
 
@@ -87,6 +87,9 @@
     }
     const params = new URLSearchParams({ flightNo: normalized, hours: '15' });
     if (options.cacheOnly) params.set('cache', '1');
+    if (Number.isInteger(options.candidateIndex) && options.candidateIndex > 0) {
+      params.set('candidate', String(options.candidateIndex));
+    }
     const response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), {
       cache: 'no-store',
       headers: headers()
@@ -95,7 +98,10 @@
     return {
       blob: await response.blob(),
       fileName: decodeURIComponent(response.headers.get('X-Attachment-Name') || `${normalized}.pdf`),
-      mailSubject: decodeURIComponent(response.headers.get('X-Mail-Subject') || '')
+      mailSubject: decodeURIComponent(response.headers.get('X-Mail-Subject') || ''),
+      mailDate: decodeURIComponent(response.headers.get('X-Mail-Date') || ''),
+      candidateIndex: Number(response.headers.get('X-Candidate-Index') || 0),
+      candidateCount: Number(response.headers.get('X-Candidate-Count') || 1)
     };
   }
 
@@ -118,7 +124,7 @@
     syncMail,
     recentMail,
     flightAttachment,
-    cachedFlightAttachment: flightNumber => flightAttachment(flightNumber, { cacheOnly: true }),
+    cachedFlightAttachment: (flightNumber, options = {}) => flightAttachment(flightNumber, { ...options, cacheOnly: true }),
     flightPdf: flightAttachment,
     flightData
   });
