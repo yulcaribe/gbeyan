@@ -7,12 +7,6 @@ error_reporting(E_ALL);
 
 $config = require __DIR__ . '/config.php';
 require_once __DIR__ . '/helpers.php';
-require_once __DIR__ . '/EasClient.php';
-require_once __DIR__ . '/EwsClient.php';
-require_once __DIR__ . '/MailCache.php';
-require_once __DIR__ . '/LdmParser.php';
-require_once __DIR__ . '/TripInfoParser.php';
-require_once __DIR__ . '/MailService.php';
 require_once __DIR__ . '/private-page.php';
 
 gb_apply_common_headers($config);
@@ -68,6 +62,15 @@ if (!str_starts_with($path, '/api/mail/') && $path !== '/api/admin/snapshot') {
     http_response_code(404);
     exit;
 }
+
+// Load the Exchange/mail stack only for endpoints that actually need it.
+// This keeps /healthz and /api/auth/verify independent from mail runtime issues.
+require_once __DIR__ . '/EasClient.php';
+require_once __DIR__ . '/EwsClient.php';
+require_once __DIR__ . '/MailCache.php';
+require_once __DIR__ . '/LdmParser.php';
+require_once __DIR__ . '/TripInfoParser.php';
+require_once __DIR__ . '/MailService.php';
 
 if ((string) ($config['username'] ?? '') === '' || (string) ($config['password'] ?? '') === '') {
     gb_send_json(['error' => 'EWS_USERNAME, EWS_PASSWORD veya TEST_API_KEY secret eksik.'], 503);
