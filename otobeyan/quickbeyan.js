@@ -1,4 +1,4 @@
-const QUICKBEYAN_VERSION = '1.8.2';
+const QUICKBEYAN_VERSION = '1.8.4';
 
 const state = {
   busy: false,
@@ -311,27 +311,51 @@ async function checkMailConnectivity() {
 async function searchCrewMail(context) {
   const sourceToken = state.crewSourceToken;
   const fetchCrewAttachment = globalThis.OtoBeyanApi?.flightAttachment || globalThis.OtoBeyanApi?.flightPdf;
-  if (fetchCrewAttachment && globalThis.GendecBrowser?.parseFile) {
+  const parser = globalThis.GendecBrowser;
+  if (fetchCrewAttachment && parser?.parseFile) {
     try {
-      const attachment = await fetchCrewAttachment(context.flightNumber);
-      const fileName = attachment.fileName || `${context.flightNumber}.pdf`;
-      const file = new File([attachment.blob], fileName, {
-        type: attachment.blob.type || 'application/octet-stream',
-        lastModified: Date.now()
-      });
-      const result = await globalThis.GendecBrowser.parseFile(file, {
-        flightNo: context.flightNumber,
-        tailNumber: context.tailNumber || '',
-        departurePortCode: context.departurePortCode || '',
-        arrivalPortCode: context.arrivalPortCode || ''
-      });
-      const crews = result?.crews;
-      if (!Array.isArray(crews) || !crews.length) {
-        throw new Error('GenDec bulundu fakat ekip listesi browser üzerinde ayrıştırılamadı.');
+      let candidateIndex = 0;
+      let candidateCount = 1;
+      let lastError = null;
+
+      while (candidateIndex < candidateCount && candidateIndex < 10) {
+        const attachment = await fetchCrewAttachment(context.flightNumber, { candidateIndex });
+        candidateCount = Math.max(1, Number(attachment.candidateCount || 1));
+        const fileName = attachment.fileName || `${context.flightNumber}.pdf`;
+        const file = new File([attachment.blob], fileName, {
+          type: attachment.blob.type || 'application/octet-stream',
+          lastModified: Date.now()
+        });
+
+        try {
+          const result = await parser.parseFile(file, {
+            flightNo: context.flightNumber,
+            tailNumber: context.tailNumber || '',
+            departurePortCode: context.departurePortCode || '',
+            arrivalPortCode: context.arrivalPortCode || ''
+          });
+
+          const isPdf = /\.pdf$/i.test(fileName);
+          if (isPdf && !parser.resultMatchesFlight?.(result, context.flightNumber)) {
+            const found = (result?.metadata?.flightNumbers || []).join(', ') || 'sefer no okunamadı';
+            throw new Error(`Yanlış GenDec içeriği: ${fileName} içinde ${context.flightNumber} yok (okunan: ${found}).`);
+          }
+
+          const crews = result?.crews;
+          if (!Array.isArray(crews) || !crews.length) {
+            throw new Error('GenDec bulundu fakat ekip listesi browser üzerinde ayrıştırılamadı.');
+          }
+          if (sourceToken !== state.crewSourceToken) return null;
+          const revisionInfo = attachment.mailDate ? ` · ${attachment.mailDate}` : '';
+          renderCrewEditor(crews, `Mail GenDec · ${fileName}${revisionInfo}`);
+          return crews;
+        } catch (error) {
+          lastError = error;
+          candidateIndex += 1;
+        }
       }
-      if (sourceToken !== state.crewSourceToken) return null;
-      renderCrewEditor(crews, `Mail GenDec · ${fileName}`);
-      return crews;
+
+      throw lastError || new Error(`${context.flightNumber} için doğrulanmış GenDec bulunamadı.`);
     } catch (error) {
       if (sourceToken !== state.crewSourceToken) return null;
       addMessage(`GenDec bulunamadı veya okunamadı: ${error?.message || 'Bilinmeyen hata.'} Ekibi aşağıdaki tablodan elle girebilirsin.`, 'error');
