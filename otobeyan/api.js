@@ -82,8 +82,7 @@
 
   async function flightCrew(input = {}) {
     const params = new URLSearchParams({
-      flightNumber: String(input.flightNumber || ''),
-      tailNumber: String(input.tailNumber || '')
+      flightNumber: String(input.flightNumber || '')
     });
     if (input.cacheOnly) params.set('cache', '1');
     return jsonRequest(`/api/mail/flight-crew?${params}`);
