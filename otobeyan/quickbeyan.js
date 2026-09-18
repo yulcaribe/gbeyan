@@ -314,19 +314,18 @@ async function searchCrewMail(context) {
   if (fetchCrew) {
     try {
       const result = await fetchCrew({
-        flightNumber: context.flightNumber,
-        tailNumber: context.tailNumber
+        flightNumber: context.flightNumber
       });
       const crews = result?.crews;
       if (!Array.isArray(crews) || !crews.length) {
-        throw new Error('Uçuş ve kuyruk numarası doğrulanmış ekip listesi bulunamadı.');
+        throw new Error('Sefer numarası doğrulanmış ekip listesi bulunamadı.');
       }
       if (sourceToken !== state.crewSourceToken) return null;
       renderCrewEditor(crews, `Mail GenDec · ${result.source?.attachmentName || context.flightNumber}`);
       return crews;
     } catch (error) {
       if (sourceToken !== state.crewSourceToken) return null;
-      addMessage('GenDec bulunamadı veya okunamadı. Ekibi aşağıdaki tablodan elle girebilirsin.', 'error');
+      addMessage(`GenDec bulunamadı veya okunamadı: ${error?.message || 'Bilinmeyen hata.'} Ekibi aşağıdaki tablodan elle girebilirsin.`, 'error');
       if (sourceToken === state.crewSourceToken && !state.crews.length) {
         renderCrewEditor([{ sourceTypeCode: 'MANUEL', crewTypeCode: 'CA' }], 'Manuel ekip');
       }
