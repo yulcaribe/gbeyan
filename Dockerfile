@@ -10,4 +10,4 @@ RUN printf '<Directory /var/www/html>\nOptions -Indexes +FollowSymLinks\nAllowOv
 ENV PORT=10000
 EXPOSE 10000
 
-CMD ["sh", "-c", "sed -ri \"s/^Listen 80$/Listen ${PORT}/\" /etc/apache2/ports.conf && sed -ri \"s/<VirtualHost \\*:80>/<VirtualHost *:${PORT}>/\" /etc/apache2/sites-available/000-default.conf && apache2-foreground"]
+CMD ["sh", "-c", "if [ -f /etc/secrets/config.local.php ]; then cp /etc/secrets/config.local.php /var/www/html/api-php/config.local.php && chown www-data:www-data /var/www/html/api-php/config.local.php && chmod 600 /var/www/html/api-php/config.local.php; fi; sed -ri \"s/^Listen 80$/Listen ${PORT}/\" /etc/apache2/ports.conf; sed -ri \"s/<VirtualHost \\*:80>/<VirtualHost *:${PORT}>/\" /etc/apache2/sites-available/000-default.conf; exec apache2-foreground"]
