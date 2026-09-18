@@ -7,6 +7,7 @@ yulcaribe-main/index.html
 .env
 .env.*
 !.env.example
+api-php/config.local.php
 **/node_modules/
 
 # Generated static hosting output
