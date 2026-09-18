@@ -1,10 +1,37 @@
 <?php
 declare(strict_types=1);
 
+$gbLocalConfig = [];
+$gbLocalConfigPath = __DIR__ . '/config.local.php';
+if (is_file($gbLocalConfigPath)) {
+    $loadedLocalConfig = require $gbLocalConfigPath;
+    if (is_array($loadedLocalConfig)) {
+        $gbLocalConfig = $loadedLocalConfig;
+    }
+}
+
 function gb_env(string $name, ?string $default = null): ?string
 {
     $value = getenv($name);
-    return $value === false ? $default : $value;
+    if ($value !== false) {
+        return $value;
+    }
+
+    global $gbLocalConfig;
+    if (array_key_exists($name, $gbLocalConfig)) {
+        $localValue = $gbLocalConfig[$name];
+        if ($localValue === null) {
+            return $default;
+        }
+        if (is_bool($localValue)) {
+            return $localValue ? '1' : '0';
+        }
+        if (is_scalar($localValue)) {
+            return (string) $localValue;
+        }
+    }
+
+    return $default;
 }
 
 function gb_env_bool(string $name, bool $default): bool
@@ -35,7 +62,7 @@ function gb_origin_from_url(?string $url): ?string
 }
 
 $origins = ['null', 'https://gbeyan.onrender.com'];
-$extraOrigins = preg_split('/\s*,\s*/', (string) gb_env('CORS_ALLOWED_ORIGINS', ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+$extraOrigins = preg_split('/\\s*,\\s*/', (string) gb_env('CORS_ALLOWED_ORIGINS', ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 foreach ($extraOrigins as $origin) {
     $origins[] = rtrim($origin, '/');
 }
