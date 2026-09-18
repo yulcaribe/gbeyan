@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.8.1';
+  const CLIENT_VERSION = '1.8.2';
   const API_URL = 'https://gbeyan-api.onrender.com';
   let accessCode = '';
 
@@ -80,12 +80,23 @@
     return jsonRequest('/api/mail/messages?hours=15');
   }
 
-  async function flightCrew(input = {}) {
-    const params = new URLSearchParams({
-      flightNumber: String(input.flightNumber || '')
+  async function flightAttachment(flightNumber, options = {}) {
+    const normalized = String(flightNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!/^[A-Z0-9]{2,3}\d{1,5}[A-Z]?$/.test(normalized)) {
+      throw new Error('Sefer numarası XQ254 biçiminde olmalı.');
+    }
+    const params = new URLSearchParams({ flightNo: normalized, hours: '15' });
+    if (options.cacheOnly) params.set('cache', '1');
+    const response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), {
+      cache: 'no-store',
+      headers: headers()
     });
-    if (input.cacheOnly) params.set('cache', '1');
-    return jsonRequest(`/api/mail/flight-crew?${params}`);
+    if (!response.ok) throw await responseError(response);
+    return {
+      blob: await response.blob(),
+      fileName: decodeURIComponent(response.headers.get('X-Attachment-Name') || `${normalized}.pdf`),
+      mailSubject: decodeURIComponent(response.headers.get('X-Mail-Subject') || '')
+    };
   }
 
   async function flightData(input) {
@@ -106,7 +117,9 @@
     health,
     syncMail,
     recentMail,
-    flightCrew,
+    flightAttachment,
+    cachedFlightAttachment: flightNumber => flightAttachment(flightNumber, { cacheOnly: true }),
+    flightPdf: flightAttachment,
     flightData
   });
 
