@@ -9,3 +9,12 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 # When this repository is the domain document root, keep the public API path
 # stable while the PHP implementation lives under api-php/.
 RewriteRule ^api(?:/.*)?$ api-php/index.php [QSA,L]
+
+
+# Allow the downloaded local index.html (Origin: null) to load static browser assets.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(?:css|js)$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Cross-Origin-Resource-Policy "cross-origin"
+  </FilesMatch>
+</IfModule>
