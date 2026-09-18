@@ -32,13 +32,61 @@
     return pages;
   }
 
+  function selectFlightPages(pages, flightNumber) {
+    const wanted = flightVariants(flightNumber);
+    if (!wanted.size || !flightNumber) return pages;
+
+    const pageFlights = pages.map(page => ({
+      page,
+      flights: global.GendecParser.extractMetadata(page.text)?.flightNumbers || []
+    }));
+
+    const matchingIndexes = pageFlights
+      .map((entry, index) => entry.flights.some(value => wanted.has(global.GendecParser.normalizeFlightNumber(value))) ? index : -1)
+      .filter(index => index >= 0);
+
+    if (!matchingIndexes.length) return [];
+
+    const selected = new Set();
+    for (const index of matchingIndexes) {
+      selected.add(index);
+
+      // Aynı uçuşun tablo devamı bir sonraki sayfadaysa, o sayfada başka
+      // bir sefer numarası başlayana kadar devam sayfasını da dahil et.
+      for (let cursor = index + 1; cursor < pageFlights.length; cursor += 1) {
+        const flights = pageFlights[cursor].flights
+          .map(value => global.GendecParser.normalizeFlightNumber(value))
+          .filter(Boolean);
+        if (flights.length && !flights.some(value => wanted.has(value))) break;
+        selected.add(cursor);
+        if (flights.some(value => wanted.has(value))) continue;
+        // Uçuş numarası olmayan tek devam sayfası yeterli; daha ilerisine taşma.
+        break;
+      }
+    }
+
+    return [...selected].sort((a, b) => a - b).map(index => pages[index]);
+  }
+
   async function parsePdf(file, context = {}) {
     const pages = await readPdfPages(file);
-    const text = pages.map(page => page.text).join('\n');
+    const selectedPages = context.flightNo ? selectFlightPages(pages, context.flightNo) : pages;
+    const parsePages = selectedPages.length ? selectedPages : pages;
+    const text = parsePages.map(page => page.text).join('\n');
     const generic = global.GendecParser.parseText(text);
     const fhy = global.FHYParser?.parsePages?.(pages, context) || null;
     const crews = fhy?.matched && fhy.crews?.length ? fhy.crews : generic.crews;
-    return { crews: global.GendecParser.removeDuplicateCrews(crews), metadata: generic.metadata, text, fhy };
+    return {
+      crews: global.GendecParser.removeDuplicateCrews(crews),
+      metadata: generic.metadata,
+      text,
+      fhy,
+      pageSelection: {
+        totalPages: pages.length,
+        selectedPages: parsePages.map(page => page.pageNo),
+        matchedFlight: Boolean(selectedPages.length)
+      }
+    };
   }
 
   async function parseExcel(file) {
