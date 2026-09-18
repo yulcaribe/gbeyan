@@ -61,7 +61,7 @@ function gb_origin_from_url(?string $url): ?string
     return $origin;
 }
 
-$origins = ['null', 'https://gbeyan.onrender.com'];
+$origins = ['null'];
 $extraOrigins = preg_split('/\\s*,\\s*/', (string) gb_env('CORS_ALLOWED_ORIGINS', ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 foreach ($extraOrigins as $origin) {
     $origins[] = rtrim($origin, '/');
@@ -74,7 +74,7 @@ foreach ([gb_env('PUBLIC_URL'), gb_env('RENDER_EXTERNAL_URL')] as $publicUrl) {
 }
 
 return [
-    'version' => '1.8.6-php-mail-browser-parse',
+    'version' => '1.8.7-php-mail-browser-parse',
     'api_key' => (string) gb_env('TEST_API_KEY', ''),
     'username' => (string) gb_env('EWS_USERNAME', ''),
     'password' => (string) gb_env('EWS_PASSWORD', ''),

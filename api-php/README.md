@@ -1,77 +1,57 @@
-# gbeyanphp PHP backend
+# gbeyan PHP backend
 
-Parallel PHP backend for gbeyan. The existing Node backend in `yulcaribe/gbeyan` remains independent and is not required by this repository.
+Bu proje cPanel/shared-hosting üzerinde çalışan PHP 8.1+ backend'dir. Node.js veya Render gerekmez.
 
-## cPanel target
+## Gereksinimler
 
-Recommended PHP: **8.1+**
-
-Required:
+- PHP 8.1+
 - cURL
 - DOM/XML
-- cURL built with NTLM support for EWS
+- mbstring önerilir
+- EWS çöp kutusu temizliği için cURL NTLM desteği
 
-Recommended:
-- mbstring
+## Sunucu ayarları
 
-The repository-root `.htaccess` routes `/api/...` to `api-php/index.php`. If `api-php/` itself is configured as the domain/subdomain document root, its own `.htaccess` handles routing.
+Gerçek secret değerlerini repoya yazma. cPanel sunucusunda `api-php/config.local.php` oluştur ve
+`api-php/config.local.example.php` dosyasını örnek al.
 
-## Server-only configuration
+Desteklenen ayarlar:
 
-Do not commit credentials.
-
-Required environment variables:
 - `TEST_API_KEY`
 - `EWS_USERNAME`
 - `EWS_PASSWORD`
+- `GENDEC` veya `GENDEC_FOLDER_PATH`
+- `LDM` veya `LDM_FOLDER_PATH`
+- `TRIPINFO` veya `TRIP_INFO_FOLDER_PATH`
+- isteğe bağlı `CORS_ALLOWED_ORIGINS`
+- isteğe bağlı `EXCHANGE_VERIFY_TLS`
 
-Folder defaults:
-- `GENDEC` or `GENDEC_FOLDER_PATH`
-- `LDM` or `LDM_FOLDER_PATH`
-- `TRIPINFO` or `TRIP_INFO_FOLDER_PATH`
+## Adresler
 
-Optional:
-- `CORS_ALLOWED_ORIGINS` — comma-separated origins
-- `PUBLIC_URL`
-- `RENDER_EXTERNAL_URL`
-- `EXCHANGE_VERIFY_TLS` — defaults to true
+Domain document root'u bu repo kökü olmalıdır.
 
-Built-in Exchange endpoints:
-- ActiveSync: `https://posta.tgs.aero/Microsoft-Server-ActiveSync`
-- EWS: `https://posta.tgs.aero/EWS/Exchange.asmx`
-- Domain: `tgs`
+- Ana uygulama: `https://gbeyan.yulcaribe.com/`
+- API paneli: `https://gbeyan.yulcaribe.com/api/`
+- Auth: `GET /api/auth/verify`
+- Mail cache: `GET /api/mail/messages?hours=15`
+- Senkronizasyon: `POST /api/mail/sync`
+- GenDec eki: `GET /api/mail/flight-attachment?flightNo=XQ660&hours=15`
+- Önceki GenDec adayı: aynı endpoint + `candidate=1`
+- Uçuş verisi: `GET /api/mail/flight-data?flightNumber=XQ660&flightDate=2026-09-18&tailNumber=TC-SNU`
+- Ayarlar: `GET/POST /api/mail/settings`
+- Yönetim snapshot: `GET /api/admin/snapshot`
 
-## Implemented API
+## Çalışma modeli
 
-- `GET /api/auth/verify`
-- `GET /api/mail/messages`
-- `POST /api/mail/sync`
-- `GET /api/mail/flight-attachment?flightNo=XQ660&candidate=0`
-- `GET /api/mail/flight-data?flightNumber=XQ660&flightDate=2026-09-18&tailNumber=TC-SNU`
-- `GET /api/mail/settings`
-- `POST /api/mail/settings`
-- `GET /api/mail/attachment?id=...&name=...`
+- GenDec PDF/XLS/XLSX PHP'de parse edilmez; ham ek tarayıcıya gider ve mevcut browser parser'ları okur.
+- LDM eşleşmesi sefer no + kuyruk ile yapılır.
+- TripInfo mevcut parser mantığıyla block fuel ve diğer alanları üretir.
+- Mail cache dosya tabanlıdır ve 5 dakika TTL kullanır.
+- Gerçek Exchange refresh'i `flock` ile tekilleştirilir.
+- GENDEC/LDM/TRIPINFO kaynaklarında 15 saatten eski iletiler Trash'e taşınır.
+- Her gerçek refresh sonunda Deleted Items EWS HardDelete ile tamamen boşaltılır.
 
-All protected API calls require:
+## Statik bağımlılıklar
 
-`Authorization: Bearer <TEST_API_KEY>`
-
-## Runtime behavior
-
-- Mail snapshot cache: 5 minutes.
-- Refresh lock: `storage/mail-refresh.lock` with `flock`.
-- Snapshot: `storage/mail-cache.json`, written atomically.
-- Persistent non-secret folder settings: `storage/settings.json`.
-- Source mail older than 15 hours: moved to Deleted Items with ActiveSync `DeletesAsMoves=1`.
-- Every real Exchange refresh: Deleted Items are emptied via EWS `EmptyFolder DeleteType="HardDelete"` with no age filter.
-- GenDec PDF/XLS/XLSX is never parsed on PHP; the attachment is returned as raw binary for browser-side parsing.
-- GenDec candidates match flight number only and are ordered newest mail first.
-- LDM/TripInfo behavior follows the current Node parsers.
-
-## Production error handling
-
-`index.php` disables `display_errors` and enables server-side error logging so PHP warnings/notices cannot be mixed into binary attachment responses.
-
-## Before frontend cutover
-
-Keep the Node backend active. Compare Node and PHP responses for the same flights, then switch the frontend base URL only after the cPanel Exchange tests pass.
+Frontend dosyaları, GenDec parser'ları, CSS, PDF.js ve XLSX bu repodan ve aynı domainden servis edilir.
+Harici uygulama servisi olarak yalnızca gerçek HGBS endpoint'i kullanılır.

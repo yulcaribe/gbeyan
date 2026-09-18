@@ -1,14 +1,13 @@
-yulcaribe-main/index.html
 /.codex-remote-attachments
-10.09.2026 DAILY.xlsx
 .DS_Store
+10.09.2026 DAILY.xlsx
+yulcaribe-main/index.html
 
-# Local credentials and dependencies
+# Server-only credentials and runtime state
 .env
 .env.*
 !.env.example
 api-php/config.local.php
-**/node_modules/
-
-# Generated static hosting output
-/dist/
+api-php/storage/*
+!api-php/storage/.gitignore
+!api-php/storage/.htaccess
