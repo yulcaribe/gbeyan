@@ -610,9 +610,22 @@ function clearActionPanel() {
   state.actionPanel = null;
 }
 
-function updateDeclarationValue(key, value) {
+function updateDeclarationValue(key, value, control = null) {
   if (!state.declaration) return;
-  state.declaration[key] = key === 'fuelType' ? value : Math.max(0, Number.parseInt(value, 10) || 0);
+  if (key === 'fuelType') {
+    state.declaration[key] = value;
+  } else if (key === 'fuel') {
+    const fuel = Number.parseInt(value, 10);
+    if (!Number.isFinite(fuel) || fuel <= 0) {
+      state.declaration.fuel = 0;
+      if (control) control.value = '';
+    } else {
+      state.declaration.fuel = fuel;
+    }
+  } else {
+    state.declaration[key] = Math.max(0, Number.parseInt(value, 10) || 0);
+  }
+  renderActionPanel();
   renderLiveSummary();
 }
 
@@ -622,23 +635,28 @@ function renderActionPanel() {
   if (!context?.row) return;
 
   const declaration = state.declaration || { pax: 0, infant: 0, fuel: 0, fuelType: 'foreign' };
-  const combinedReady = state.crews.length > 0;
+  const fuelReady = Number(state.declaration?.fuel || 0) > 0;
+  const combinedReady = state.crews.length > 0 && fuelReady;
   const message = addMessage('', 'bot');
   message.classList.add('otobeyan-wide');
   message.innerHTML = `<strong>HGBS işlemine hazırla</strong>
     <div class="otobeyan-review">
       <label>PAX<input type="number" min="0" data-declaration="pax" value="${escapeHtml(declaration.pax)}"></label>
       <label>INFANT<input type="number" min="0" data-declaration="infant" value="${escapeHtml(declaration.infant)}"></label>
-      <label>OffBlock Fuel KG<input type="number" min="0" data-declaration="fuel" value="${escapeHtml(declaration.fuel)}"></label>
+      <label>OffBlock Fuel KG<input type="number" min="1" step="1" data-declaration="fuel" value="${Number(declaration.fuel) > 0 ? escapeHtml(declaration.fuel) : ''}" placeholder="En az 1"></label>
       <label>HGBS Yakıt Alanı<select data-declaration="fuelType"><option value="foreign"${declaration.fuelType === 'foreign' ? ' selected' : ''}>Yabancı</option><option value="national"${declaration.fuelType === 'national' ? ' selected' : ''}>Milli</option></select></label>
       <div class="otobeyan-inline-actions">
         <button class="otobeyan-btn primary" type="button" data-open-only>Sadece Uçuşu Aç</button>
         <button class="otobeyan-btn success" type="button" data-open-declare ${combinedReady ? '' : 'disabled'}>Aç + Beyan Et</button>
       </div>
     </div>
-    ${combinedReady ? '<div class="otobeyan-source-arrow">Aç + Beyan Et bu ekrandaki tek onaydır; işlem sağ alttaki bildirimden takip edilir.</div>' : '<div class="otobeyan-source-arrow">Aç + Beyan Et için önce ekip PDF bulunmalı veya yüklenmeli.</div>'}`;
+    ${combinedReady
+      ? '<div class="otobeyan-source-arrow">Aç + Beyan Et bu ekrandaki tek onaydır; işlem sağ alttaki bildirimden takip edilir.</div>'
+      : !fuelReady
+        ? '<div class="otobeyan-source-arrow">Aç + Beyan Et için yakıt en az 1 KG olmalı.</div>'
+        : '<div class="otobeyan-source-arrow">Aç + Beyan Et için önce ekip PDF bulunmalı veya yüklenmeli.</div>'}`;
   message.querySelectorAll('[data-declaration]').forEach(control => {
-    control.addEventListener('input', () => updateDeclarationValue(control.dataset.declaration, control.value));
+    control.addEventListener('input', () => updateDeclarationValue(control.dataset.declaration, control.value, control));
   });
   message.querySelector('[data-open-only]').addEventListener('click', () => openFlightConfirmation(false));
   message.querySelector('[data-open-declare]').addEventListener('click', event => {
@@ -680,6 +698,10 @@ async function openFlightConfirmation(withDeclaration, triggerButton = null) {
     const crewError = validateCrewDraft();
     if (crewError) {
       addMessage(crewError, 'error');
+      return;
+    }
+    if (!(Number(state.declaration?.fuel) > 0)) {
+      addMessage('Yakıt 0 olamaz. Aç + Beyan Et için en az 1 KG yakıt gir.', 'error');
       return;
     }
   }
@@ -780,6 +802,11 @@ async function confirmOpenAndDeclare(job, triggerButton = null) {
   }
 
   try {
+    const declaredFuel = Number(job.declaration?.fuel || 0);
+    if (!(declaredFuel > 0)) {
+      throw new Error('Yakıt 0 olamaz. Beyan için en az 1 KG yakıt gerekli.');
+    }
+
     const crewCount = job.crews.length;
     const captainName = getCaptainName(job.crews);
     const eta = job.eta;
@@ -820,7 +847,7 @@ async function confirmOpenAndDeclare(job, triggerButton = null) {
     const declaration = job.declaration || {};
     const pax = Math.max(0, Number(declaration.pax) || 0);
     const infant = Math.max(0, Number(declaration.infant) || 0);
-    const fuel = Math.max(0, Number(declaration.fuel) || 0);
+    const fuel = Number(declaration.fuel) || 0;
     const isDeparture = flightDetail.flightTypeCode === 'GDS' || row.type === 'GİDİŞ';
     airState.hasPassenger = pax + infant > 0;
     airState.passengerLoadThisPort = isDeparture ? pax : 0;
