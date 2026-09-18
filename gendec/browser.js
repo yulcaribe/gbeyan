@@ -57,7 +57,30 @@
     throw new Error('Yalnızca PDF, XLS veya XLSX dosyası desteklenir.');
   }
 
-  global.GendecBrowser = Object.freeze({ parseFile, parsePdf, parseExcel, readPdfPages, pdfTextContentToPage });
+  function flightVariants(value) {
+    const normalized = global.GendecParser?.normalizeFlightNumber?.(value)
+      || String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const variants = new Set([normalized]);
+    const aliases = { FHY: 'FH', FH: 'FHY', STW: '2S', '2S': 'STW', TWI: 'TI', TI: 'TWI' };
+    for (const [prefix, alias] of Object.entries(aliases)) {
+      if (!normalized.startsWith(prefix)) continue;
+      const number = normalized.slice(prefix.length);
+      if (/^\d{1,5}[A-Z]?$/.test(number)) variants.add(`${alias}${number}`);
+    }
+    return variants;
+  }
+
+  function resultMatchesFlight(result, flightNumber) {
+    const wanted = flightVariants(flightNumber);
+    const parsedFlights = (result?.metadata?.flightNumbers || [])
+      .map(value => global.GendecParser?.normalizeFlightNumber?.(value) || String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+      .filter(Boolean);
+    return parsedFlights.some(value => wanted.has(value));
+  }
+
+  global.GendecBrowser = Object.freeze({
+    parseFile, parsePdf, parseExcel, readPdfPages, pdfTextContentToPage, resultMatchesFlight
+  });
   global.parseCrewPdfFileData = parsePdf;
   global.readCrewExcelFile = async file => (await parseExcel(file)).crews;
 })(typeof window !== 'undefined' ? window : globalThis);
