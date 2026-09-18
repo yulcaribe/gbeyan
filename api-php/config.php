@@ -44,35 +44,11 @@ function gb_env_bool(string $name, bool $default): bool
     return $value ?? $default;
 }
 
-function gb_origin_from_url(?string $url): ?string
-{
-    $value = trim((string) $url);
-    if ($value === '') {
-        return null;
-    }
-    $parts = parse_url($value);
-    if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
-        return null;
-    }
-    $origin = strtolower((string) $parts['scheme']) . '://' . (string) $parts['host'];
-    if (isset($parts['port'])) {
-        $origin .= ':' . (int) $parts['port'];
-    }
-    return $origin;
-}
-
 $origins = ['null'];
 $extraOrigins = preg_split('/\\s*,\\s*/', (string) gb_env('CORS_ALLOWED_ORIGINS', ''), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 foreach ($extraOrigins as $origin) {
     $origins[] = rtrim($origin, '/');
 }
-foreach ([gb_env('PUBLIC_URL'), gb_env('RENDER_EXTERNAL_URL')] as $publicUrl) {
-    $origin = gb_origin_from_url($publicUrl);
-    if ($origin !== null) {
-        $origins[] = $origin;
-    }
-}
-
 return [
     'version' => '1.8.7-php-mail-browser-parse',
     'api_key' => (string) gb_env('TEST_API_KEY', ''),
