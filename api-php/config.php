@@ -3,16 +3,22 @@ declare(strict_types=1);
 
 $gbLocalConfig = [];
 $gbLocalConfigPaths = [
-    '/etc/secrets/config.local.php', // Render / Docker secret file
-    __DIR__ . '/config.local.php',   // cPanel / shared hosting
+    __DIR__ . '/config.local.php',   // cPanel / Docker runtime copy
+    '/etc/secrets/config.local.php', // Render secret file fallback
 ];
 
 foreach ($gbLocalConfigPaths as $gbLocalConfigPath) {
-    if (!is_file($gbLocalConfigPath)) {
+    if (!is_file($gbLocalConfigPath) || !is_readable($gbLocalConfigPath)) {
         continue;
     }
 
-    $loadedLocalConfig = require $gbLocalConfigPath;
+    try {
+        $loadedLocalConfig = require $gbLocalConfigPath;
+    } catch (Throwable $error) {
+        error_log('[gbeyanphp] config load failed for ' . $gbLocalConfigPath . ': ' . $error->getMessage());
+        continue;
+    }
+
     if (is_array($loadedLocalConfig)) {
         $gbLocalConfig = $loadedLocalConfig;
         break;
