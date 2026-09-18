@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.8.4';
+  const CLIENT_VERSION = '1.8.5';
   const API_URL = 'https://gbeyan-api.onrender.com';
   let accessCode = '';
 
