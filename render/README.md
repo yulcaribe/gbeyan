@@ -53,10 +53,10 @@ ilk gerçek Exchange taramasını başlatır. `/api/mail/sync` POST taramayı zo
 ortak kullanılır. Eşzamanlı taramalar aynı promise'i bekler; her personel için
 ayrı Exchange taraması başlatılmaz. Sunucu uyurken mail kontrolü yapılmaz.
 Yeni istek geldiğinde gerekiyorsa son 15 saat yeniden taranır. GenDec, LDM ve
-Trip Info klasörlerinde 15 saatten eski mesajlar kalıcı silinir. Çöp Kutusu
-her mail yenilemesinde taranır ve 15 saatten eski tüm mesajlar, türüne
-bakılmadan gerçek Exchange permanent-delete ile temizlenir. Başarı ancak
-silme yanıtı ve yeniden senkronizasyon doğrulamasından sonra bildirilir.
+Trip Info klasörlerinde 15 saatten eski mesajlar önce Çöp Kutusu'na taşınır.
+Her gerçek mail yenilemesinin sonunda Çöp Kutusu için saat filtresi uygulanmaz;
+içindeki tüm öğeler çalışan Beyan Mail projesindeki EWS EmptyFolder +
+HardDelete yöntemiyle kalıcı olarak temizlenir.
 
 Snapshot ve panelden değiştirilen klasör ayarları bellektedir; sunucu yeniden
 başladığında kaybolur. Kalmasını istediğin klasör yollarını Render Environment
