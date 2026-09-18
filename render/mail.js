@@ -6,7 +6,7 @@
  */
 import { normalizeDate, normalizeFlightNumber, normalizeTail, parseLdmMessage } from './ldm-parser.js';
 import { parseTripInfoMessage } from './tripinfo-parser.js';
-import { attachmentCacheKey, matchesFlightNumber, parseGendecAttachment } from './gendec.js';
+import { attachmentCacheKey, parseGendecAttachment } from './gendec.js';
 
 const EAS = 'https://posta.tgs.aero/Microsoft-Server-ActiveSync';
 const DOMAIN = 'tgs';
@@ -721,7 +721,7 @@ export default {
               parsed = await parseGendecAttachment(bytes, match.attachment, { flightNo });
               if (parsed.crews?.length) await services.mailCache?.saveParsedGendec?.(key, parsed);
             }
-            if (!parsed.crews?.length || !matchesFlightNumber(parsed, flightNo)) continue;
+            if (!parsed.crews?.length) continue;
             return json({
               ok: true, status: 'ready', flightNumber: flightNo, crews: parsed.crews,
               source: { receivedAt: match.message.date, subject: match.message.subject, attachmentName: match.attachment.name }
