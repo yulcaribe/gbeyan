@@ -6,11 +6,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HGBS</title>
   <script>
-    if (location.protocol === 'file:') {
-      document.write('<base href="https://gbeyan.yulcaribe.com/">');
-    }
+    (function configureLocalSource() {
+      if (location.protocol !== 'file:') return;
+
+      const primary = 'https://gbeyan.yulcaribe.com/';
+      const fallback = 'https://gbeyan.onrender.com/';
+      const params = new URLSearchParams(location.search);
+      const useFallback = params.get('gbSource') === 'render';
+      const selected = useFallback ? fallback : primary;
+
+      window.__GBEYAN_LOCAL_BASE__ = selected.replace(/\/$/, '');
+      document.write('<base href="' + selected + '">');
+
+      if (!useFallback) {
+        window.addEventListener('error', function (event) {
+          const target = event.target;
+          const url = target?.src || target?.href || '';
+          const isAsset = target instanceof HTMLScriptElement || target instanceof HTMLLinkElement;
+          if (!isAsset || !url.startsWith(primary)) return;
+
+          const next = new URL(location.href);
+          next.searchParams.set('gbSource', 'render');
+          location.replace(next.href);
+        }, true);
+      }
+    })();
   </script>
-  <meta name="app-version" content="v1.8.8">
+  <meta name="app-version" content="v1.8.9">
   <link rel="stylesheet" href="style.css?v=1.8.8">
 </head>
 <body>
@@ -20,7 +42,7 @@
   <div class="login-card">
     <h1>TGS HGSB Gönderim</h1>
     <p>Devam etmek için sisteme giriş yapın.</p>
-    <span class="app-version-badge">v1.8.8</span>
+    <span class="app-version-badge">v1.8.9</span>
 
     <div id="loginAlert"></div>
 
@@ -60,7 +82,7 @@
       </div>
     </div>
     <div class="topbar-right">
-      <span class="app-version-badge">v1.8.8</span>
+      <span class="app-version-badge">v1.8.9</span>
       <button id="logoutBtn" onclick="logout()">Çıkış Yap</button>
     </div>
   </div>
@@ -415,7 +437,7 @@
 //  Constants
 // ─────────────────────────────────────────────
 const MOCK_MODE    = false;   // ← test MOD
-const APP_VERSION  = 'v1.8.8';
+const APP_VERSION  = 'v1.8.9';
 const BASE_URL     = 'https://hgbsapi.ticaret.gov.tr';
 const KEY_TOKEN    = 'tgs_bearer';
 const KEY_USER     = 'tgs_user';

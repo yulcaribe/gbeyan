@@ -1,15 +1,18 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.8.8';
-  const API_URL = (global.location?.protocol === 'http:' || global.location?.protocol === 'https:')
+  const CLIENT_VERSION = '1.8.9';
+  const LOCAL_PRIMARY_API = 'https://gbeyan.yulcaribe.com';
+  const LOCAL_FALLBACK_API = 'https://gbeyan.onrender.com';
+  const IS_LOCAL_FILE = global.location?.protocol === 'file:';
+  let apiUrl = (global.location?.protocol === 'http:' || global.location?.protocol === 'https:')
     ? global.location.origin
-    : 'https://gbeyan.yulcaribe.com';
+    : (global.__GBEYAN_LOCAL_BASE__ || LOCAL_PRIMARY_API);
   let accessCode = '';
 
   function config() {
     return {
-      apiUrl: API_URL,
+      apiUrl,
       mailLookbackHours: 15
     };
   }
@@ -37,11 +40,26 @@
   }
 
   async function jsonRequest(path, options = {}) {
-    const response = await fetch(endpoint(path), {
+    const requestOptions = {
       cache: 'no-store',
       ...options,
       headers: headers(options.headers)
-    });
+    };
+
+    let response;
+    try {
+      response = await fetch(endpoint(path), requestOptions);
+    } catch (error) {
+      if (!IS_LOCAL_FILE || apiUrl === LOCAL_FALLBACK_API) throw error;
+      apiUrl = LOCAL_FALLBACK_API;
+      response = await fetch(endpoint(path), requestOptions);
+    }
+
+    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && response.status >= 500) {
+      apiUrl = LOCAL_FALLBACK_API;
+      response = await fetch(endpoint(path), requestOptions);
+    }
+
     if (!response.ok) throw await responseError(response);
     return response.json();
   }
