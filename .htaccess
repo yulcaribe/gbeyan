@@ -1,0 +1,11 @@
+Options -Indexes
+
+RewriteEngine On
+
+# Preserve Bearer auth on common cPanel/FastCGI setups.
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# When this repository is the domain document root, keep the public API path
+# stable while the PHP implementation lives under api-php/.
+RewriteRule ^api(?:/.*)?$ api-php/index.php [QSA,L]
