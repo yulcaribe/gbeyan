@@ -1,18 +1,66 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.9.2';
-  const LOCAL_PRIMARY_API = 'https://gbeyan.yulcaribe.com';
-  const LOCAL_FALLBACK_API = 'https://gbeyan.onrender.com';
+  const CLIENT_VERSION = '1.9.3';
+  const PRIMARY_API = 'https://gbeyan.yulcaribe.com';
+  const FALLBACK_API = 'https://gbeyan.onrender.com';
   const hostname = String(global.location?.hostname || '').toLowerCase();
-  const IS_HOSTED =
-    hostname === 'gbeyan.yulcaribe.com' ||
-    hostname === 'gbeyan.onrender.com';
-  const IS_LOCAL_FILE = !IS_HOSTED;
-  let apiUrl = IS_HOSTED
-    ? global.location.origin
-    : (global.__GBEYAN_LOCAL_BASE__ || LOCAL_PRIMARY_API);
+
+  function readFallbackMode() {
+    if (hostname === 'gbeyan.onrender.com') return true;
+    if (global.name === 'gbeyan:render') return true;
+    if (String(global.location?.hash || '').includes('gbSource=render')) return true;
+    try {
+      return global.sessionStorage?.getItem('gbeyanApiSource') === 'render';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  let apiUrl = readFallbackMode() ? FALLBACK_API : PRIMARY_API;
   let accessCode = '';
+  let fallbackReloadStarted = false;
+
+  function switchToFallbackAndReload() {
+    if (apiUrl === FALLBACK_API || fallbackReloadStarted) return false;
+    fallbackReloadStarted = true;
+    apiUrl = FALLBACK_API;
+
+    try { global.name = 'gbeyan:render'; } catch (_) {}
+    try { global.sessionStorage?.setItem('gbeyanApiSource', 'render'); } catch (_) {}
+    try {
+      if (!String(global.location?.hash || '').includes('gbSource=render')) {
+        global.location.hash = 'gbSource=render';
+      }
+    } catch (_) {}
+
+    global.location.reload();
+    return true;
+  }
+
+  function shouldFallbackStatus(status) {
+    return status === 403 || status >= 500;
+  }
+
+  async function fetchWithFallback(path, options) {
+    let response;
+    try {
+      response = await fetch(endpoint(path), options);
+    } catch (error) {
+      if (switchToFallbackAndReload()) {
+        throw new Error('Yedek servise geçiliyor…');
+      }
+      throw error;
+    }
+
+    if (!response.ok && apiUrl !== FALLBACK_API && shouldFallbackStatus(response.status)) {
+      if (switchToFallbackAndReload()) {
+        throw new Error('Yedek servise geçiliyor…');
+      }
+    }
+
+    return response;
+  }
 
   function config() {
     return {
@@ -50,19 +98,7 @@
       headers: headers(options.headers)
     };
 
-    let response;
-    try {
-      response = await fetch(endpoint(path), requestOptions);
-    } catch (error) {
-      if (!IS_LOCAL_FILE || apiUrl === LOCAL_FALLBACK_API) throw error;
-      apiUrl = LOCAL_FALLBACK_API;
-      response = await fetch(endpoint(path), requestOptions);
-    }
-
-    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && (response.status === 403 || response.status >= 500)) {
-      apiUrl = LOCAL_FALLBACK_API;
-      response = await fetch(endpoint(path), requestOptions);
-    }
+    const response = await fetchWithFallback(path, requestOptions);
 
     if (!response.ok) throw await responseError(response);
     return response.json();
@@ -119,19 +155,10 @@
       headers: headers()
     };
 
-    let response;
-    try {
-      response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
-    } catch (error) {
-      if (!IS_LOCAL_FILE || apiUrl === LOCAL_FALLBACK_API) throw error;
-      apiUrl = LOCAL_FALLBACK_API;
-      response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
-    }
-
-    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && (response.status === 403 || response.status >= 500)) {
-      apiUrl = LOCAL_FALLBACK_API;
-      response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
-    }
+    const response = await fetchWithFallback(
+      `/api/mail/flight-attachment?${params}`,
+      requestOptions
+    );
 
     if (!response.ok) throw await responseError(response);
     return {
