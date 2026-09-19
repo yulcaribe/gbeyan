@@ -7,33 +7,14 @@
   <title>HGBS</title>
   <script>
     (function configureLocalSource() {
-      if (location.protocol !== 'file:') return;
-
-      const primary = 'https://gbeyan.yulcaribe.com/';
-      const fallback = 'https://gbeyan.onrender.com/';
-      const params = new URLSearchParams(location.search);
-      const useFallback = params.get('gbSource') === 'render';
-      const selected = useFallback ? fallback : primary;
-
-      window.__GBEYAN_LOCAL_BASE__ = selected.replace(/\/$/, '');
-      document.write('<base href="' + selected + '">');
-
-      if (!useFallback) {
-        window.addEventListener('error', function (event) {
-          const target = event.target;
-          const url = target?.src || target?.href || '';
-          const isAsset = target instanceof HTMLScriptElement || target instanceof HTMLLinkElement;
-          if (!isAsset || !url.startsWith(primary)) return;
-
-          const next = new URL(location.href);
-          next.searchParams.set('gbSource', 'render');
-          location.replace(next.href);
-        }, true);
-      }
+      const protocol = String(location.protocol || '').toLowerCase();
+      window.__GBEYAN_LOCAL_FILE__ = protocol !== 'http:' && protocol !== 'https:';
+      window.__GBEYAN_ASSET_PRIMARY__ = 'https://gbeyan.yulcaribe.com/';
+      window.__GBEYAN_ASSET_FALLBACK__ = 'https://gbeyan.onrender.com/';
     })();
   </script>
   <meta name="app-version" content="v1.8.9">
-  <link rel="stylesheet" href="style.css?v=1.8.9">
+  <link rel="stylesheet" href="https://gbeyan.yulcaribe.com/style.css?v=1.8.9" onerror="this.onerror=null;this.href='https://gbeyan.onrender.com/style.css?v=1.8.9'">
 </head>
 <body>
 
@@ -425,8 +406,8 @@
  
  
 <!-- ══════════════════════ PDF READER MIN CDN JS ══════════════════════ -->
-<script src="datas/countries.js?v=1.8.9"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=3.11.174"></script>
+<script src="https://gbeyan.yulcaribe.com/datas/countries.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/datas/countries.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/vendor/pdfjs/pdf.min.js?v=3.11.174" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/vendor/pdfjs/pdf.min.js?v=3.11.174'" onload="window.__GBEYAN_PDFJS_BASE__=this.src.replace(/pdf\.min\.js.*$/,'')"></script>
 
 <!-- ══════════════════════ MAIN SCRIPTS ══════════════════════ -->
 <script>
@@ -4189,25 +4170,29 @@ init();
 </script>
 
 <!-- CARGO MANIFEST SCRIPT -->
-<script src="cargo/cargo-core.js?v=1.8.9"></script>
+<script src="https://gbeyan.yulcaribe.com/cargo/cargo-core.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/cargo/cargo-core.js?v=1.8.9'"></script>
 
 
 
-<script> pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('vendor/pdfjs/pdf.worker.min.js?v=3.11.174', document.baseURI).href; </script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    (window.__GBEYAN_PDFJS_BASE__ || 'https://gbeyan.onrender.com/vendor/pdfjs/') +
+    'pdf.worker.min.js?v=3.11.174';
+</script>
 
-<script src="gendec/fhy.js?v=1.8.9"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/fhy.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/fhy.js?v=1.8.9'"></script>
 
-<script src="vendor/xlsx/xlsx.full.min.js?v=0.18.5"></script>
+<script src="https://gbeyan.yulcaribe.com/vendor/xlsx/xlsx.full.min.js?v=0.18.5" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/vendor/xlsx/xlsx.full.min.js?v=0.18.5'"></script>
 
 <!-- CREWDEC GENDEC SCRIPT -->
-<script src="gendec/parser.js?v=1.8.9"></script>
-<script src="gendec/noz.js?v=1.8.9"></script>
-<script src="gendec/rys.js?v=1.8.9"></script>
-<script src="gendec/sxs.js?v=1.8.9"></script>
-<script src="gendec/browser.js?v=1.8.9"></script>
-<script src="gendec/ui.js?v=1.8.9"></script>
-<script src="otobeyan/api.js?v=1.8.9"></script>
-<script src="otobeyan/quickbeyan.js?v=1.8.9"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/parser.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/parser.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/noz.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/noz.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/rys.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/rys.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/sxs.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/sxs.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/browser.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/browser.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/gendec/ui.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/ui.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/otobeyan/api.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/api.js?v=1.8.9'"></script>
+<script src="https://gbeyan.yulcaribe.com/otobeyan/quickbeyan.js?v=1.8.9" onerror="this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/quickbeyan.js?v=1.8.9'"></script>
 
 </body>
 </html>
