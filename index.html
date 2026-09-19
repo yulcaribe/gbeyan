@@ -7,35 +7,55 @@
   <title>HGBS</title>
   <script>
     (function configureLocalSource() {
+      const PRIMARY = 'https://gbeyan.yulcaribe.com/';
+      const FALLBACK = 'https://gbeyan.onrender.com/';
       const hostname = String(location.hostname || '').toLowerCase();
       const isHosted =
         hostname === 'gbeyan.yulcaribe.com' ||
         hostname === 'gbeyan.onrender.com';
       const isLocal = !isHosted;
+
       window.__GBEYAN_LOCAL_FILE__ = isLocal;
-      window.__GBEYAN_ASSET_PRIMARY__ = 'https://gbeyan.yulcaribe.com/';
-      window.__GBEYAN_ASSET_FALLBACK__ = 'https://gbeyan.onrender.com/';
-      window.__GBEYAN_SCRIPT_FAILED__ = false;
-      window.__gbAssetLoaded = function (el) {
-        window.__GBEYAN_SCRIPT_FAILED__ = false;
-        const src = String(el?.src || '');
-        if (src.includes('/vendor/pdfjs/pdf.min.js')) {
-          window.__GBEYAN_PDFJS_BASE__ = src.replace(/pdf\.min\.js(?:\?.*)?$/, '');
-        }
-      };
-      window.__gbScriptFallback = function (path) {
-        if (!window.__GBEYAN_LOCAL_FILE__ || !window.__GBEYAN_SCRIPT_FAILED__) return;
-        window.__GBEYAN_SCRIPT_FAILED__ = false;
-        const src = window.__GBEYAN_ASSET_FALLBACK__ + path;
-        document.write('<script src="' + src + '" onload="window.__gbAssetLoaded(this)"><\/script>');
-      };
-      if (isLocal) {
-        document.write('<base href="' + window.__GBEYAN_ASSET_PRIMARY__ + '">');
-      }
+      window.__GBEYAN_ASSET_PRIMARY__ = PRIMARY;
+      window.__GBEYAN_ASSET_FALLBACK__ = FALLBACK;
+
+      if (!isLocal) return;
+
+      let useRender = String(location.hash || '').includes('gbSource=render');
+      try {
+        useRender = useRender || sessionStorage.getItem('gbeyanLocalSource') === 'render';
+      } catch (_) {}
+
+      const selected = useRender ? FALLBACK : PRIMARY;
+      window.__GBEYAN_LOCAL_BASE__ = selected.replace(/\/$/, '');
+      document.write('<base href="' + selected + '">');
+
+      if (useRender) return;
+
+      let switching = false;
+      window.addEventListener('error', function (event) {
+        if (switching) return;
+        const target = event.target;
+        const isAsset =
+          target instanceof HTMLScriptElement ||
+          target instanceof HTMLLinkElement;
+        const url = String(target?.src || target?.href || '');
+
+        if (!isAsset || !url.startsWith(PRIMARY)) return;
+
+        switching = true;
+        try { sessionStorage.setItem('gbeyanLocalSource', 'render'); } catch (_) {}
+        try {
+          if (!String(location.hash || '').includes('gbSource=render')) {
+            location.hash = 'gbSource=render';
+          }
+        } catch (_) {}
+        location.reload();
+      }, true);
     })();
   </script>
-  <meta name="app-version" content="v1.9.1">
-  <link rel="stylesheet" href="style.css?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.href='https://gbeyan.onrender.com/style.css?v=1.9.1'}">
+  <meta name="app-version" content="v1.9.2">
+  <link rel="stylesheet" href="style.css?v=1.9.2">
 </head>
 <body>
 
@@ -44,7 +64,7 @@
   <div class="login-card">
     <h1>TGS HGSB Gönderim</h1>
     <p>Devam etmek için sisteme giriş yapın.</p>
-    <span class="app-version-badge">v1.9.1</span>
+    <span class="app-version-badge">v1.9.2</span>
 
     <div id="loginAlert"></div>
 
@@ -84,7 +104,7 @@
       </div>
     </div>
     <div class="topbar-right">
-      <span class="app-version-badge">v1.9.1</span>
+      <span class="app-version-badge">v1.9.2</span>
       <button id="logoutBtn" onclick="logout()">Çıkış Yap</button>
     </div>
   </div>
@@ -427,10 +447,8 @@
  
  
 <!-- ══════════════════════ PDF READER MIN CDN JS ══════════════════════ -->
-<script src="datas/countries.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('datas/countries.js?v=1.9.1');</script>
-<script src="vendor/pdfjs/pdf.min.js?v=3.11.174" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('vendor/pdfjs/pdf.min.js?v=3.11.174');</script>
+<script src="datas/countries.js?v=1.9.2"></script>
+<script src="vendor/pdfjs/pdf.min.js?v=3.11.174"></script>
 
 <!-- ══════════════════════ MAIN SCRIPTS ══════════════════════ -->
 <script>
@@ -441,7 +459,7 @@
 //  Constants
 // ─────────────────────────────────────────────
 const MOCK_MODE    = false;   // ← test MOD
-const APP_VERSION  = 'v1.9.1';
+const APP_VERSION  = 'v1.9.2';
 const BASE_URL     = 'https://hgbsapi.ticaret.gov.tr';
 const KEY_TOKEN    = 'tgs_bearer';
 const KEY_USER     = 'tgs_user';
@@ -4193,44 +4211,28 @@ init();
 </script>
 
 <!-- CARGO MANIFEST SCRIPT -->
-<script src="cargo/cargo-core.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('cargo/cargo-core.js?v=1.9.1');</script>
+<script src="cargo/cargo-core.js?v=1.9.2"></script>
 
 
 
 <script>
-  (function () {
-    const workerBase =
-      window.__GBEYAN_PDFJS_BASE__ ||
-      new URL('vendor/pdfjs/', document.baseURI).href;
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      workerBase + 'pdf.worker.min.js?v=3.11.174';
-  })();
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    new URL('vendor/pdfjs/pdf.worker.min.js?v=3.11.174', document.baseURI).href;
 </script>
 
-<script src="gendec/fhy.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/fhy.js?v=1.9.1');</script>
+<script src="gendec/fhy.js?v=1.9.2"></script>
 
-<script src="vendor/xlsx/xlsx.full.min.js?v=0.18.5" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('vendor/xlsx/xlsx.full.min.js?v=0.18.5');</script>
+<script src="vendor/xlsx/xlsx.full.min.js?v=0.18.5"></script>
 
 <!-- CREWDEC GENDEC SCRIPT -->
-<script src="gendec/parser.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/parser.js?v=1.9.1');</script>
-<script src="gendec/noz.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/noz.js?v=1.9.1');</script>
-<script src="gendec/rys.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/rys.js?v=1.9.1');</script>
-<script src="gendec/sxs.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/sxs.js?v=1.9.1');</script>
-<script src="gendec/browser.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/browser.js?v=1.9.1');</script>
-<script src="gendec/ui.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('gendec/ui.js?v=1.9.1');</script>
-<script src="otobeyan/api.js?v=1.9.1&fix=local-fallback" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('otobeyan/api.js?v=1.9.1&fix=local-fallback');</script>
-<script src="otobeyan/quickbeyan.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
-<script>window.__gbScriptFallback('otobeyan/quickbeyan.js?v=1.9.1');</script>
+<script src="gendec/parser.js?v=1.9.2"></script>
+<script src="gendec/noz.js?v=1.9.2"></script>
+<script src="gendec/rys.js?v=1.9.2"></script>
+<script src="gendec/sxs.js?v=1.9.2"></script>
+<script src="gendec/browser.js?v=1.9.2"></script>
+<script src="gendec/ui.js?v=1.9.2"></script>
+<script src="otobeyan/api.js?v=1.9.2"></script>
+<script src="otobeyan/quickbeyan.js?v=1.9.2"></script>
 
 </body>
 </html>
