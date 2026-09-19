@@ -65,7 +65,7 @@ foreach ($extraOrigins as $origin) {
     $origins[] = rtrim($origin, '/');
 }
 return [
-    'version' => '1.9.0-php-mail-browser-parse',
+    'version' => '1.9.1-php-mail-browser-parse',
     'api_key' => (string) gb_env('TEST_API_KEY', ''),
     'username' => (string) gb_env('EWS_USERNAME', ''),
     'password' => (string) gb_env('EWS_PASSWORD', ''),
