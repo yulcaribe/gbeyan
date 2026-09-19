@@ -59,7 +59,7 @@
       response = await fetch(endpoint(path), requestOptions);
     }
 
-    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && response.status >= 500) {
+    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && (response.status === 403 || response.status >= 500)) {
       apiUrl = LOCAL_FALLBACK_API;
       response = await fetch(endpoint(path), requestOptions);
     }
@@ -128,7 +128,7 @@
       response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
     }
 
-    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && response.status >= 500) {
+    if (!response.ok && IS_LOCAL_FILE && apiUrl !== LOCAL_FALLBACK_API && (response.status === 403 || response.status >= 500)) {
       apiUrl = LOCAL_FALLBACK_API;
       response = await fetch(endpoint(`/api/mail/flight-attachment?${params}`), requestOptions);
     }
