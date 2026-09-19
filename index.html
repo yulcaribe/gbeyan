@@ -21,7 +21,9 @@
 
       if (!isLocal) return;
 
-      let useRender = String(location.hash || '').includes('gbSource=render');
+      let useRender =
+        window.name === 'gbeyan:render' ||
+        String(location.hash || '').includes('gbSource=render');
       try {
         useRender = useRender || sessionStorage.getItem('gbeyanLocalSource') === 'render';
       } catch (_) {}
@@ -44,6 +46,7 @@
         if (!isAsset || !url.startsWith(PRIMARY)) return;
 
         switching = true;
+        try { window.name = 'gbeyan:render'; } catch (_) {}
         try { sessionStorage.setItem('gbeyanLocalSource', 'render'); } catch (_) {}
         try {
           if (!String(location.hash || '').includes('gbSource=render')) {
