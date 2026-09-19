@@ -1,7 +1,7 @@
 (function installOtoBeyanApi(global) {
   'use strict';
 
-  const CLIENT_VERSION = '1.8.9';
+  const CLIENT_VERSION = '1.9.0';
   const LOCAL_PRIMARY_API = 'https://gbeyan.yulcaribe.com';
   const LOCAL_FALLBACK_API = 'https://gbeyan.onrender.com';
   const IS_LOCAL_FILE = global.location?.protocol === 'file:';
