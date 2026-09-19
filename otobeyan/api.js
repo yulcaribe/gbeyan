@@ -4,9 +4,12 @@
   const CLIENT_VERSION = '1.9.1';
   const LOCAL_PRIMARY_API = 'https://gbeyan.yulcaribe.com';
   const LOCAL_FALLBACK_API = 'https://gbeyan.onrender.com';
-  const protocol = String(global.location?.protocol || '').toLowerCase();
-  const IS_LOCAL_FILE = protocol !== 'http:' && protocol !== 'https:';
-  let apiUrl = (global.location?.protocol === 'http:' || global.location?.protocol === 'https:')
+  const hostname = String(global.location?.hostname || '').toLowerCase();
+  const IS_HOSTED =
+    hostname === 'gbeyan.yulcaribe.com' ||
+    hostname === 'gbeyan.onrender.com';
+  const IS_LOCAL_FILE = !IS_HOSTED;
+  let apiUrl = IS_HOSTED
     ? global.location.origin
     : (global.__GBEYAN_LOCAL_BASE__ || LOCAL_PRIMARY_API);
   let accessCode = '';
