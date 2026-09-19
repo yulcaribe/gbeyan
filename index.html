@@ -15,6 +15,20 @@
       window.__GBEYAN_LOCAL_FILE__ = isLocal;
       window.__GBEYAN_ASSET_PRIMARY__ = 'https://gbeyan.yulcaribe.com/';
       window.__GBEYAN_ASSET_FALLBACK__ = 'https://gbeyan.onrender.com/';
+      window.__GBEYAN_SCRIPT_FAILED__ = false;
+      window.__gbAssetLoaded = function (el) {
+        window.__GBEYAN_SCRIPT_FAILED__ = false;
+        const src = String(el?.src || '');
+        if (src.includes('/vendor/pdfjs/pdf.min.js')) {
+          window.__GBEYAN_PDFJS_BASE__ = src.replace(/pdf\.min\.js(?:\?.*)?$/, '');
+        }
+      };
+      window.__gbScriptFallback = function (path) {
+        if (!window.__GBEYAN_LOCAL_FILE__ || !window.__GBEYAN_SCRIPT_FAILED__) return;
+        window.__GBEYAN_SCRIPT_FAILED__ = false;
+        const src = window.__GBEYAN_ASSET_FALLBACK__ + path;
+        document.write('<script src="' + src + '" onload="window.__gbAssetLoaded(this)"><\\/script>');
+      };
       if (isLocal) {
         document.write('<base href="' + window.__GBEYAN_ASSET_PRIMARY__ + '">');
       }
@@ -413,8 +427,10 @@
  
  
 <!-- ══════════════════════ PDF READER MIN CDN JS ══════════════════════ -->
-<script src="datas/countries.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/datas/countries.js?v=1.9.1'}"></script>
-<script src="vendor/pdfjs/pdf.min.js?v=3.11.174" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/vendor/pdfjs/pdf.min.js?v=3.11.174'}" id="gbeyanPdfJs"></script>
+<script src="datas/countries.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('datas/countries.js?v=1.9.1');</script>
+<script src="vendor/pdfjs/pdf.min.js?v=3.11.174" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('vendor/pdfjs/pdf.min.js?v=3.11.174');</script>
 
 <!-- ══════════════════════ MAIN SCRIPTS ══════════════════════ -->
 <script>
@@ -4177,31 +4193,44 @@ init();
 </script>
 
 <!-- CARGO MANIFEST SCRIPT -->
-<script src="cargo/cargo-core.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/cargo/cargo-core.js?v=1.9.1'}"></script>
+<script src="cargo/cargo-core.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('cargo/cargo-core.js?v=1.9.1');</script>
 
 
 
 <script>
   (function () {
-    const pdfScript = document.getElementById('gbeyanPdfJs');
-    const loadedSrc = pdfScript?.src || new URL('vendor/pdfjs/pdf.min.js?v=3.11.174', document.baseURI).href;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = loadedSrc.replace(/pdf\.min\.js(?:\?.*)?$/, 'pdf.worker.min.js?v=3.11.174');
+    const workerBase =
+      window.__GBEYAN_PDFJS_BASE__ ||
+      new URL('vendor/pdfjs/', document.baseURI).href;
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      workerBase + 'pdf.worker.min.js?v=3.11.174';
   })();
 </script>
 
-<script src="gendec/fhy.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/fhy.js?v=1.9.1'}"></script>
+<script src="gendec/fhy.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/fhy.js?v=1.9.1');</script>
 
-<script src="vendor/xlsx/xlsx.full.min.js?v=0.18.5" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/vendor/xlsx/xlsx.full.min.js?v=0.18.5'}"></script>
+<script src="vendor/xlsx/xlsx.full.min.js?v=0.18.5" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('vendor/xlsx/xlsx.full.min.js?v=0.18.5');</script>
 
 <!-- CREWDEC GENDEC SCRIPT -->
-<script src="gendec/parser.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/parser.js?v=1.9.1'}"></script>
-<script src="gendec/noz.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/noz.js?v=1.9.1'}"></script>
-<script src="gendec/rys.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/rys.js?v=1.9.1'}"></script>
-<script src="gendec/sxs.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/sxs.js?v=1.9.1'}"></script>
-<script src="gendec/browser.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/browser.js?v=1.9.1'}"></script>
-<script src="gendec/ui.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/ui.js?v=1.9.1'}"></script>
-<script src="otobeyan/api.js?v=1.9.1&fix=local-fallback" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/api.js?v=1.9.1&fix=local-fallback'}"></script>
-<script src="otobeyan/quickbeyan.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/quickbeyan.js?v=1.9.1'}"></script>
+<script src="gendec/parser.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/parser.js?v=1.9.1');</script>
+<script src="gendec/noz.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/noz.js?v=1.9.1');</script>
+<script src="gendec/rys.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/rys.js?v=1.9.1');</script>
+<script src="gendec/sxs.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/sxs.js?v=1.9.1');</script>
+<script src="gendec/browser.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/browser.js?v=1.9.1');</script>
+<script src="gendec/ui.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('gendec/ui.js?v=1.9.1');</script>
+<script src="otobeyan/api.js?v=1.9.1&fix=local-fallback" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('otobeyan/api.js?v=1.9.1&fix=local-fallback');</script>
+<script src="otobeyan/quickbeyan.js?v=1.9.1" onload="window.__gbAssetLoaded(this)" onerror="window.__GBEYAN_SCRIPT_FAILED__=true"></script>
+<script>window.__gbScriptFallback('otobeyan/quickbeyan.js?v=1.9.1');</script>
 
 </body>
 </html>
