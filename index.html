@@ -7,8 +7,11 @@
   <title>HGBS</title>
   <script>
     (function configureLocalSource() {
-      const protocol = String(location.protocol || '').toLowerCase();
-      const isLocal = protocol !== 'http:' && protocol !== 'https:';
+      const hostname = String(location.hostname || '').toLowerCase();
+      const isHosted =
+        hostname === 'gbeyan.yulcaribe.com' ||
+        hostname === 'gbeyan.onrender.com';
+      const isLocal = !isHosted;
       window.__GBEYAN_LOCAL_FILE__ = isLocal;
       window.__GBEYAN_ASSET_PRIMARY__ = 'https://gbeyan.yulcaribe.com/';
       window.__GBEYAN_ASSET_FALLBACK__ = 'https://gbeyan.onrender.com/';
@@ -4197,7 +4200,7 @@ init();
 <script src="gendec/sxs.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/sxs.js?v=1.9.1'}"></script>
 <script src="gendec/browser.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/browser.js?v=1.9.1'}"></script>
 <script src="gendec/ui.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/gendec/ui.js?v=1.9.1'}"></script>
-<script src="otobeyan/api.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/api.js?v=1.9.1'}"></script>
+<script src="otobeyan/api.js?v=1.9.1&fix=local-fallback" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/api.js?v=1.9.1&fix=local-fallback'}"></script>
 <script src="otobeyan/quickbeyan.js?v=1.9.1" onerror="if(window.__GBEYAN_LOCAL_FILE__){this.onerror=null;this.src='https://gbeyan.onrender.com/otobeyan/quickbeyan.js?v=1.9.1'}"></script>
 
 </body>
