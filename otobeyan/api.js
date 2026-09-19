@@ -4,7 +4,8 @@
   const CLIENT_VERSION = '1.9.0';
   const LOCAL_PRIMARY_API = 'https://gbeyan.yulcaribe.com';
   const LOCAL_FALLBACK_API = 'https://gbeyan.onrender.com';
-  const IS_LOCAL_FILE = global.location?.protocol === 'file:';
+  const protocol = String(global.location?.protocol || '').toLowerCase();
+  const IS_LOCAL_FILE = protocol !== 'http:' && protocol !== 'https:';
   let apiUrl = (global.location?.protocol === 'http:' || global.location?.protocol === 'https:')
     ? global.location.origin
     : (global.__GBEYAN_LOCAL_BASE__ || LOCAL_PRIMARY_API);
