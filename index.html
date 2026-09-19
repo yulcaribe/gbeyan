@@ -27,7 +27,7 @@
         if (!window.__GBEYAN_LOCAL_FILE__ || !window.__GBEYAN_SCRIPT_FAILED__) return;
         window.__GBEYAN_SCRIPT_FAILED__ = false;
         const src = window.__GBEYAN_ASSET_FALLBACK__ + path;
-        document.write('<script src="' + src + '" onload="window.__gbAssetLoaded(this)"><\\/script>');
+        document.write('<script src="' + src + '" onload="window.__gbAssetLoaded(this)"><\/script>');
       };
       if (isLocal) {
         document.write('<base href="' + window.__GBEYAN_ASSET_PRIMARY__ + '">');
